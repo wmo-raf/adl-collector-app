@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
@@ -56,7 +57,6 @@ class MainActivity : ComponentActivity() {
     private var currentTenant: TenantConfig? = null
     private var currentAuthRequest: AuthorizationRequest? = null
 
-    private val redirectUri = Uri.parse("com.climtech.adlcollector://oauth2redirect")
 
     // UI state
     private var isLoggedIn = mutableStateOf(false)
@@ -116,7 +116,8 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             try {
                 val list = tenantRepo.listTenants()
-                tenants.value = list
+                val visibleList = list.filter { it.visible } // hide soft-removed tenants
+                tenants.value = visibleList
 
                 // Choose selected id: keep previous if still present, otherwise use first (or null)
                 selectedTenantId.value = when {
@@ -124,7 +125,7 @@ class MainActivity : ComponentActivity() {
                     else -> list.firstOrNull()?.id
                 }
 
-                currentTenant = list.firstOrNull { it.id == selectedTenantId.value }
+                currentTenant = visibleList.firstOrNull { it.id == selectedTenantId.value }
 
                 isLoading.value = false
                 updateUI()
@@ -151,20 +152,27 @@ class MainActivity : ComponentActivity() {
     private fun startLoginDynamic() {
         val tenant = currentTenant
         if (tenant == null) {
-            errorMessage.value = "Please select a country."
+            errorMessage.value = "Please select an ADL Instance."
             updateUI(); return
         }
+
+        if (!tenant.enabled) {
+            errorMessage.value = "${tenant.name} is disabled."
+            updateUI(); return
+        }
+
+
         try {
             isLoading.value = true
             errorMessage.value = ""
             updateUI()
 
             val serviceConfig = AuthorizationServiceConfiguration(
-                Uri.parse(tenant.authorizeEndpoint), Uri.parse(tenant.tokenEndpoint)
+                tenant.authorizeEndpoint, tenant.tokenEndpoint
             )
 
             val authRequest = AuthorizationRequest.Builder(
-                serviceConfig, tenant.clientId, ResponseTypeValues.CODE, redirectUri
+                serviceConfig, tenant.clientId, ResponseTypeValues.CODE, tenant.redirectUri.toUri()
             ).setScopes(*tenant.scopes.toTypedArray()).build()
 
             currentAuthRequest = authRequest
@@ -176,6 +184,7 @@ class MainActivity : ComponentActivity() {
             updateUI()
         }
     }
+
 
     private fun handleAuthorizationRedirectUri(uri: Uri) {
         val code = uri.getQueryParameter("code")
@@ -195,7 +204,8 @@ class MainActivity : ComponentActivity() {
         val tokenRequest = TokenRequest.Builder(
             launchedRequest.configuration, tenant.clientId
         ).setGrantType(GrantTypeValues.AUTHORIZATION_CODE).setAuthorizationCode(code)
-            .setRedirectUri(redirectUri).setCodeVerifier(launchedRequest.codeVerifier).build()
+            .setRedirectUri(tenant.redirectUri.toUri())
+            .setCodeVerifier(launchedRequest.codeVerifier).build()
 
         isLoading.value = true
         updateUI()
@@ -333,7 +343,7 @@ fun LoginScreen(
                 onClick = onLoginClick,
                 modifier = Modifier.fillMaxWidth(),
                 enabled = tenants.isNotEmpty() && selectedId != null
-            ) { Text("Login with OAuth2") }
+            ) { Text("Login") }
         }
     }
 }

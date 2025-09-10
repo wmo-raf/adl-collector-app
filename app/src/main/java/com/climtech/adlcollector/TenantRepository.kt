@@ -15,11 +15,12 @@ class TenantRepository {
                     TenantConfig(
                         id = d.id,
                         name = d.getString("name") ?: d.id,
-                        authorizeEndpoint = d.getString("authorize_endpoint")!!,
-                        tokenEndpoint = d.getString("token_endpoint")!!,
+                        baseUrl = d.getString("base_url")!!,
                         clientId = d.getString("client_id")!!,
-                        scopes = (d.get("scopes") as? List<*>)?.filterIsInstance<String>()
-                            ?: listOf("adl.read", "adl.write")
+                        enabled = d.getBoolean("enabled") ?: true,
+                        visible = d.getBoolean("visible") ?: true
+                        // scopes = (d.get("scopes") as? List<*>)?.filterIsInstance<String>() ?: listOf("adl.read","adl.write"),
+                        // redirectUri = d.getString("redirect_uri") ?: "com.climtech.adlcollector://oauth2redirect"
                     )
                 }.getOrNull()
             }
