@@ -1,0 +1,51 @@
+# --- OS cruft ---
+.DS_Store
+Thumbs.db
+
+# --- IDE / Android Studio ---
+.idea/
+*.iml
+
+# --- Gradle build outputs & caches ---
+.gradle/
+build/
+*/build/
+.cxx/
+.externalNativeBuild/
+
+# --- Android / Studio captures & logs ---
+captures/
+*.hprof
+*.log
+
+# --- Local machine config ---
+local.properties
+secrets.properties
+secrets/
+
+# --- Signing / keystores ---
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+
+# --- APK / AAB artifacts ---
+*.apk
+*.ap_
+*.aab
+
+# --- Firebase ---
+# Public repo? keep these ignored.
+app/google-services.json
+app/src/*/google-services.json    # flavor-specific (dev/staging/prod)
+
+# Any Firebase service account keys for tooling:
+firebase-*.json
+serviceAccount.json
+
+# --- Kotlin/Jetpack Compose misc ---
+# (Compose caches live under .gradle anyway; nothing special to add)
+
+# --- Misc env files ---
+.env
+.env.*
