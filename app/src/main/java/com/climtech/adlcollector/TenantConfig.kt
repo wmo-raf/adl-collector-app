@@ -29,9 +29,15 @@ data class TenantConfig(
     val revokeEndpoint: Uri get() = endpoint("o", "revoke")
     val introspectEndpoint: Uri get() = endpoint("o", "introspect")
 
-    /** Example API endpoints you can use in your data calls. */
-    val stationsListEndpoint: Uri get() = api("api", "stations")
-    val meEndpoint: Uri get() = api("api", "me") // example
+    // ADL Collector stations for the logged-in user
+    val stationLinkEndpoint: Uri
+        get() = endpoint(
+            "plugins",
+            "api",
+            "adl-collector",
+            "station-link",
+            trailingSlash = false
+        )
 
     /**
      * Build a URI under the tenant base, joining path segments safely.

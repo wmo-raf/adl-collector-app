@@ -16,11 +16,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -38,6 +40,9 @@ import androidx.core.net.toUri
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
+import com.climtech.adlcollector.net.StationsRepository
+import com.climtech.adlcollector.stations.StationsScreen
+import com.climtech.adlcollector.stations.StationsViewModel
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
@@ -57,7 +62,6 @@ class MainActivity : ComponentActivity() {
     private var currentTenant: TenantConfig? = null
     private var currentAuthRequest: AuthorizationRequest? = null
 
-
     // UI state
     private var isLoggedIn = mutableStateOf(false)
     private var userInfo = mutableStateOf("")
@@ -70,14 +74,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Log.i("OAUTH_APP", "========== APP STARTED ==========")
 
+        // Firebase init
         FirebaseApp.initializeApp(this)
 
-        val db = FirebaseFirestore.getInstance()
-        db.collection("tenants").get().addOnSuccessListener { docs ->
-            Log.i("FIREBASE", "Loaded tenants: ${docs.size()}")
-        }.addOnFailureListener { e ->
-            Log.e("FIREBASE", "Error fetching tenants", e)
-        }
+        // (Optional) quick connectivity check
+        FirebaseFirestore.getInstance().collection("tenants").get().addOnSuccessListener { docs ->
+            Log.i(
+                "FIREBASE", "Loaded tenants snapshot: ${docs.size()}"
+            )
+        }.addOnFailureListener { e -> Log.e("FIREBASE", "Error fetching tenants", e) }
 
         tenantLocal = TenantLocalStore(this)
         authService = AuthorizationService(this)
@@ -87,7 +92,7 @@ class MainActivity : ComponentActivity() {
             }
         })
 
-        // Observe saved tenant id
+        // Observe saved tenant id; when list is present, restore selection
         lifecycleScope.launch {
             tenantLocal.selectedTenantId.collect { savedId ->
                 if (savedId != null && tenants.value.isNotEmpty()) {
@@ -110,7 +115,6 @@ class MainActivity : ComponentActivity() {
         isLoading.value = true
         updateUI()
 
-        // capture current selection
         val previouslySelectedId = if (preserveSelection) selectedTenantId.value else null
 
         lifecycleScope.launch {
@@ -119,10 +123,10 @@ class MainActivity : ComponentActivity() {
                 val visibleList = list.filter { it.visible } // hide soft-removed tenants
                 tenants.value = visibleList
 
-                // Choose selected id: keep previous if still present, otherwise use first (or null)
+                // ✅ use visibleList for checks and assignment
                 selectedTenantId.value = when {
-                    previouslySelectedId != null && list.any { it.id == previouslySelectedId } -> previouslySelectedId
-                    else -> list.firstOrNull()?.id
+                    previouslySelectedId != null && visibleList.any { it.id == previouslySelectedId } -> previouslySelectedId
+                    else -> visibleList.firstOrNull()?.id
                 }
 
                 currentTenant = visibleList.firstOrNull { it.id == selectedTenantId.value }
@@ -155,12 +159,10 @@ class MainActivity : ComponentActivity() {
             errorMessage.value = "Please select an ADL Instance."
             updateUI(); return
         }
-
         if (!tenant.enabled) {
             errorMessage.value = "${tenant.name} is disabled."
             updateUI(); return
         }
-
 
         try {
             isLoading.value = true
@@ -168,7 +170,8 @@ class MainActivity : ComponentActivity() {
             updateUI()
 
             val serviceConfig = AuthorizationServiceConfiguration(
-                tenant.authorizeEndpoint, tenant.tokenEndpoint
+                tenant.authorizeEndpoint, // Uri from TenantConfig
+                tenant.tokenEndpoint      // Uri from TenantConfig
             )
 
             val authRequest = AuthorizationRequest.Builder(
@@ -184,7 +187,6 @@ class MainActivity : ComponentActivity() {
             updateUI()
         }
     }
-
 
     private fun handleAuthorizationRedirectUri(uri: Uri) {
         val code = uri.getQueryParameter("code")
@@ -211,15 +213,15 @@ class MainActivity : ComponentActivity() {
         updateUI()
 
         authService.performTokenRequest(tokenRequest) { tokenResponse, ex ->
-            runOnUiThread {
+            lifecycleScope.launch {
                 isLoading.value = false
+
                 if (tokenResponse != null) {
                     val accessToken = tokenResponse.accessToken
                     val refreshToken = tokenResponse.refreshToken
 
-                    lifecycleScope.launch {
-                        tenantLocal.saveTokens(accessToken, refreshToken)
-                    }
+                    // Wait for DataStore commit BEFORE navigating to the stations screen
+                    tenantLocal.saveTokens(accessToken, refreshToken)
 
                     isLoggedIn.value = true
                     userInfo.value = "Logged in at ${System.currentTimeMillis()}"
@@ -244,10 +246,12 @@ class MainActivity : ComponentActivity() {
         setContent {
             when {
                 errorMessage.value.isNotEmpty() -> ErrorScreen(errorMessage.value) {
-                    errorMessage.value = ""; loadTenants()
+                    errorMessage.value = ""
+                    loadTenants()
                 }
 
                 isLoading.value -> LoadingScreen()
+
                 !isLoggedIn.value -> {
                     LoginScreen(
                         tenants = tenants.value,
@@ -261,9 +265,16 @@ class MainActivity : ComponentActivity() {
                         onRefreshTenants = { loadTenants(preserveSelection = true) })
                 }
 
-                else -> HelloWorldScreen {
-                    lifecycleScope.launch { tenantLocal.clearAll() }
-                    logout()
+                else -> {
+                    val t = currentTenant
+                    if (t == null) {
+                        ErrorScreen("Missing tenant selection") { isLoggedIn.value = false }
+                    } else {
+                        val db = remember { com.climtech.adlcollector.db.AppDatabase.get(this) }
+                        val repo = remember(t.id) { StationsRepository(tenantLocal, db) }
+                        val vm = remember(t.id) { StationsViewModel(repo) }
+                        StationsScreen(tenant = t, viewModel = vm, onLogout = { logout() })
+                    }
                 }
             }
         }
@@ -271,13 +282,14 @@ class MainActivity : ComponentActivity() {
 }
 
 /* ---------- Composables ---------- */
+
 @Composable
 fun LoginScreen(
     tenants: List<TenantConfig>,
     selectedId: String?,
     onSelectTenant: (String) -> Unit,
     onLoginClick: () -> Unit,
-    onRefreshTenants: () -> Unit       // 👈 new
+    onRefreshTenants: () -> Unit
 ) {
     Scaffold { padding ->
         Column(
@@ -295,12 +307,12 @@ fun LoginScreen(
             )
             Spacer(Modifier.height(24.dp))
 
-            if (tenants.isNotEmpty()) {
-                var expanded by remember { mutableStateOf(false) }
-                val currentName =
-                    tenants.firstOrNull { it.id == selectedId }?.name ?: "Select Country"
+            var expanded by remember { mutableStateOf(false) }
+            val selectedTenant = tenants.firstOrNull { it.id == selectedId }
+            val currentName = selectedTenant?.name
+                ?: if (tenants.isNotEmpty()) "Select Country" else "No Instances"
 
-                // Row with the dropdown "button" and a refresh icon button
+            if (tenants.isNotEmpty()) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -311,27 +323,24 @@ fun LoginScreen(
                         }
                         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                             tenants.forEach { t ->
-                                DropdownMenuItem(text = { Text(t.name) }, onClick = {
-                                    onSelectTenant(t.id)
+                                val label = if (t.enabled) t.name else "${t.name} (disabled)"
+                                DropdownMenuItem(text = { Text(label) }, onClick = {
+                                    if (t.enabled) onSelectTenant(t.id)
+                                    // if disabled, keep selection unchanged
                                     expanded = false
                                 })
                             }
                         }
                     }
-
                     Spacer(Modifier.width(8.dp))
-
-                    // Refresh icon
                     IconButton(onClick = onRefreshTenants) {
-                        androidx.compose.material3.Icon(
-                            imageVector = androidx.compose.material.icons.Icons.Filled.Refresh,
+                        Icon(
+                            imageVector = Icons.Filled.Refresh,
                             contentDescription = "Refresh tenants"
                         )
                     }
                 }
-
             } else {
-                // When there are no tenants yet, still show a refresh option
                 Button(onClick = onRefreshTenants, modifier = Modifier.fillMaxWidth()) {
                     Text("Refresh Tenants")
                 }
@@ -342,12 +351,13 @@ fun LoginScreen(
             Button(
                 onClick = onLoginClick,
                 modifier = Modifier.fillMaxWidth(),
-                enabled = tenants.isNotEmpty() && selectedId != null
-            ) { Text("Login") }
+                enabled = selectedTenant != null && selectedTenant.enabled
+            ) {
+                Text("Login")
+            }
         }
     }
 }
-
 
 @Composable
 fun LoadingScreen() {
@@ -387,30 +397,6 @@ fun ErrorScreen(error: String, onRetry: () -> Unit) {
             Text(text = error, textAlign = TextAlign.Center)
             Spacer(Modifier.height(24.dp))
             Button(onClick = onRetry) { Text("Retry") }
-        }
-    }
-}
-
-@Composable
-fun HelloWorldScreen(onLogout: () -> Unit) {
-    Scaffold { padding ->
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .padding(16.dp)
-                .fillMaxSize(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                "Hello World 👋",
-                style = MaterialTheme.typography.headlineMedium,
-                textAlign = TextAlign.Center
-            )
-            Spacer(Modifier.height(16.dp))
-            Text("You are logged in!")
-            Spacer(Modifier.height(32.dp))
-            Button(onClick = onLogout) { Text("Logout") }
         }
     }
 }
