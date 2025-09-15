@@ -1,8 +1,9 @@
-package com.climtech.adlcollector
+package com.climtech.adlcollector.core.auth
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.climtech.adlcollector.tenantDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 

@@ -1,9 +1,11 @@
-package com.climtech.adlcollector.db
+package com.climtech.adlcollector.core.data.db
 
 import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import com.climtech.adlcollector.core.data.db.StationDao
+import com.climtech.adlcollector.core.data.db.StationEntity
 
 @Database(entities = [StationEntity::class], version = 1, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {

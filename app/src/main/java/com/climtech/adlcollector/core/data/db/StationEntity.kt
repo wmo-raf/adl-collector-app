@@ -1,4 +1,4 @@
-package com.climtech.adlcollector.db
+package com.climtech.adlcollector.core.data.db
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey

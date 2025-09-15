@@ -1,4 +1,4 @@
-package com.climtech.adlcollector
+package com.climtech.adlcollector.core.model
 
 import android.net.Uri
 import androidx.core.net.toUri

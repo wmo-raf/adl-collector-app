@@ -1,10 +1,10 @@
-package com.climtech.adlcollector.stations
+package com.climtech.adlcollector.feature.stations.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.climtech.adlcollector.TenantConfig
-import com.climtech.adlcollector.net.Station
-import com.climtech.adlcollector.net.StationsRepository
+import com.climtech.adlcollector.core.model.TenantConfig
+import com.climtech.adlcollector.feature.stations.data.net.Station
+import com.climtech.adlcollector.feature.stations.data.StationsRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch

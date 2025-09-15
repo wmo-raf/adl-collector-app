@@ -1,5 +1,6 @@
-package com.climtech.adlcollector
+package com.climtech.adlcollector.feature.login.data
 
+import com.climtech.adlcollector.core.model.TenantConfig
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume

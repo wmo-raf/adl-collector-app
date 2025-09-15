@@ -1,4 +1,4 @@
-package com.climtech.adlcollector.net
+package com.climtech.adlcollector.feature.stations.data.net
 
 import com.squareup.moshi.JsonClass
 

@@ -1,4 +1,4 @@
-package com.climtech.adlcollector.stations
+package com.climtech.adlcollector.feature.stations.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,8 +27,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.climtech.adlcollector.TenantConfig
-import com.climtech.adlcollector.net.Station
+import com.climtech.adlcollector.core.model.TenantConfig
+import com.climtech.adlcollector.feature.stations.data.net.Station
+import com.climtech.adlcollector.feature.stations.presentation.StationsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
