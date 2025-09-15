@@ -1,5 +1,6 @@
 package com.climtech.adlcollector.feature.stations.ui
 
+import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,10 +27,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.climtech.adlcollector.core.model.TenantConfig
+import com.climtech.adlcollector.core.ui.theme.ADLCollectorTheme
 import com.climtech.adlcollector.feature.stations.data.net.Station
+import com.climtech.adlcollector.feature.stations.presentation.StationsUiState
 import com.climtech.adlcollector.feature.stations.presentation.StationsViewModel
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,14 +49,31 @@ fun StationsScreen(
         viewModel.start(tenant) // start stream + background refresh
     }
 
+    StationsContent(
+        tenantName = tenant.name,
+        state = state,
+        onRefresh = { viewModel.refresh(tenant, showSpinner = false) },
+        onRetry = { viewModel.start(tenant) },
+        onLogout = onLogout
+    )
+}
+
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun StationsContent(
+    tenantName: String,
+    state: StationsUiState,
+    onRefresh: () -> Unit,
+    onRetry: () -> Unit,
+    onLogout: () -> Unit
+) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Stations • ${tenant.name}") },
+                title = { Text("Stations • $tenantName") },
                 actions = {
-                    TextButton(onClick = { viewModel.refresh(tenant, showSpinner = false) }) {
-                        Text("Refresh")
-                    }
+                    TextButton(onClick = { onRefresh() }) { Text("Refresh") }
                     TextButton(onClick = onLogout) { Text("Logout") }
                 }
             )
@@ -84,7 +106,7 @@ fun StationsScreen(
                     ) {
                         Text(state.error!!, color = MaterialTheme.colorScheme.error)
                         Spacer(Modifier.height(12.dp))
-                        Button(onClick = { viewModel.start(tenant) }) { Text("Retry") }
+                        Button(onClick = onRetry) { Text("Retry") }
                     }
                 }
 
@@ -119,5 +141,74 @@ private fun StationsList(itemsList: List<Station>) {
                 }
             }
         }
+    }
+}
+
+
+private fun sampleStations(): List<Station> = listOf(
+    Station(id = 101, name = "Nairobi West Substation"),
+    Station(id = 202, name = "Kisumu Bay Station"),
+    Station(id = 303, name = "Mombasa Port Station")
+)
+
+@Preview(showBackground = true, name = "Stations • Loaded")
+@Composable
+private fun PreviewStationsLoaded() {
+    ADLCollectorTheme {
+        StationsContent(
+            tenantName = "Kenya",
+            state = StationsUiState(
+                loading = false,
+                stations = sampleStations(),
+                error = null
+            ),
+            onRefresh = {},
+            onRetry = {},
+            onLogout = {}
+        )
+    }
+}
+
+@Preview(
+    showBackground = true,
+    name = "Stations • Loading",
+    uiMode = Configuration.UI_MODE_NIGHT_NO
+)
+@Composable
+private fun PreviewStationsLoading() {
+    ADLCollectorTheme {
+        StationsContent(
+            tenantName = "Kenya",
+            state = StationsUiState(
+                loading = true,
+                stations = emptyList(),
+                error = null
+            ),
+            onRefresh = {},
+            onRetry = {},
+            onLogout = {}
+        )
+    }
+}
+
+@Preview(
+    showBackground = true,
+    name = "Stations • Error",
+    uiMode = Configuration.UI_MODE_NIGHT_YES
+)
+@Composable
+private fun PreviewStationsError() {
+    ADLCollectorTheme(darkTheme = true) {
+        StationsContent(
+            tenantName = "Kenya",
+            state = StationsUiState(
+                loading = false,
+                stations = emptyList(),
+                error = "Failed to fetch stations: HTTP 401"
+            ),
+            onRefresh = {},
+            onRetry = {},
+            onLogout = {}
+        )
     }
 }

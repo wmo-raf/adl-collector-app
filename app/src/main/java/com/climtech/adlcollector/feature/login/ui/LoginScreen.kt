@@ -1,5 +1,6 @@
 package com.climtech.adlcollector.feature.login.ui
 
+import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,9 +29,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.climtech.adlcollector.core.model.TenantConfig
-import kotlin.collections.forEach
+import com.climtech.adlcollector.core.ui.theme.ADLCollectorTheme
 
 @Composable
 fun LoginScreen(
@@ -105,5 +107,79 @@ fun LoginScreen(
                 Text("Login")
             }
         }
+    }
+}
+
+
+private fun sampleTenants(): List<TenantConfig> = listOf(
+    TenantConfig(
+        id = "ke",
+        name = "Kenya",
+        baseUrl = "https://ke.adl.example.org/",
+        clientId = "mobile-app",
+        enabled = true,
+        visible = true
+    ),
+    TenantConfig(
+        id = "tz",
+        name = "Tanzania",
+        baseUrl = "https://tz.adl.example.org/",
+        clientId = "mobile-app",
+        enabled = false,        // show disabled state in menu
+        visible = true
+    ),
+    TenantConfig(
+        id = "ug",
+        name = "Uganda",
+        baseUrl = "https://ug.adl.example.org/",
+        clientId = "mobile-app",
+        enabled = true,
+        visible = true
+    )
+)
+
+@Preview(showBackground = true, name = "Login • Light")
+@Composable
+private fun PreviewLoginLight() {
+    ADLCollectorTheme {
+        LoginScreen(
+            tenants = sampleTenants(),
+            selectedId = "ke",
+            onSelectTenant = {},
+            onLoginClick = {},
+            onRefreshTenants = {}
+        )
+    }
+}
+
+@Preview(
+    showBackground = true,
+    name = "Login • Dark",
+    uiMode = Configuration.UI_MODE_NIGHT_YES
+)
+@Composable
+private fun PreviewLoginDark() {
+    ADLCollectorTheme(darkTheme = true) {
+        LoginScreen(
+            tenants = sampleTenants(),
+            selectedId = "ke",
+            onSelectTenant = {},
+            onLoginClick = {},
+            onRefreshTenants = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Login • Empty list")
+@Composable
+private fun PreviewLoginEmpty() {
+    ADLCollectorTheme {
+        LoginScreen(
+            tenants = emptyList(),
+            selectedId = null,
+            onSelectTenant = {},
+            onLoginClick = {},
+            onRefreshTenants = {}
+        )
     }
 }

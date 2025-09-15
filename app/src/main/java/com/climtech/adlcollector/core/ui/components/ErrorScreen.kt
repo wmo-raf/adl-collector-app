@@ -1,5 +1,6 @@
 package com.climtech.adlcollector.core.ui.components
 
+import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -14,7 +15,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.climtech.adlcollector.core.ui.theme.ADLCollectorTheme
 
 @Composable
 fun ErrorScreen(
@@ -40,5 +43,32 @@ fun ErrorScreen(
             Spacer(Modifier.height(24.dp))
             Button(onClick = onRetry) { Text("Retry") }
         }
+    }
+}
+
+
+@Preview(showBackground = true, name = "Error • Light")
+@Composable
+private fun PreviewErrorLight() {
+    ADLCollectorTheme {
+        ErrorScreen(
+            error = "Failed to load ADL Instances: Network timeout.",
+            onRetry = {}
+        )
+    }
+}
+
+@Preview(
+    showBackground = true,
+    name = "Error • Dark",
+    uiMode = Configuration.UI_MODE_NIGHT_YES
+)
+@Composable
+private fun PreviewErrorDark() {
+    ADLCollectorTheme(darkTheme = true) {
+        ErrorScreen(
+            error = "Token exchange failed: invalid_grant",
+            onRetry = {}
+        )
     }
 }
