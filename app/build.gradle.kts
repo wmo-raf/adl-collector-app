@@ -80,6 +80,8 @@ dependencies {
     implementation(libs.hilt.lifecycle.vm.compose)
     ksp(libs.hilt.compiler)
 
+    implementation(libs.androidx.navigation.compose)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

@@ -18,22 +18,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.compose.rememberNavController
 import com.climtech.adlcollector.core.auth.TenantLocalStore
 import com.climtech.adlcollector.core.model.TenantConfig
 import com.climtech.adlcollector.feature.login.data.TenantRepository
-import com.climtech.adlcollector.feature.login.ui.LoginScreen
-import com.climtech.adlcollector.feature.stations.presentation.StationsViewModel
-import com.climtech.adlcollector.feature.stations.ui.StationsScreen
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.AndroidEntryPoint
@@ -239,33 +237,65 @@ class MainActivity : ComponentActivity() {
     private fun updateUI() {
         setContent {
             when {
-                errorMessage.value.isNotEmpty() -> ErrorScreen(errorMessage.value) {
-                    errorMessage.value = ""
-                    loadTenants()
+                errorMessage.value.isNotEmpty() -> {
+                    ErrorScreen(error = errorMessage.value) {
+                        errorMessage.value = ""
+                        loadTenants()
+                    }
                 }
 
-                isLoading.value -> LoadingScreen()
+                isLoading.value -> {
+                    LoadingScreen()
+                }
 
-                !isLoggedIn.value -> {
-                    LoginScreen(
+                else -> {
+                    val nav = rememberNavController()
+
+                    // Decide initial destination for this composition
+                    val startDestination =
+                        if (isLoggedIn.value && selectedTenantId.value != null) Route.Stations.build(
+                            selectedTenantId.value!!
+                        )
+                        else Route.Login.route
+
+                    AppNavGraph(
+                        nav = nav,
+                        startDestination = startDestination,
                         tenants = tenants.value,
-                        selectedId = selectedTenantId.value,
+                        selectedTenantId = selectedTenantId.value,
                         onSelectTenant = { id ->
                             selectedTenantId.value = id
                             currentTenant = tenants.value.firstOrNull { it.id == id }
                             lifecycleScope.launch { tenantLocal.saveSelectedTenantId(id) }
                         },
+                        onRefreshTenants = { loadTenants(preserveSelection = true) },
                         onLoginClick = { startLoginDynamic() },
-                        onRefreshTenants = { loadTenants(preserveSelection = true) })
-                }
+                        onLogout = {
+                            // Clear local state & navigate back to Login
+                            logout()
+                            nav.navigate(com.climtech.adlcollector.app.Route.Login.route) {
+                                // Clear the back stack
+                                popUpTo(nav.graph.startDestinationId) { inclusive = true }
+                                launchSingleTop = true
+                                restoreState = false
+                            }
+                        })
 
-                else -> {
-                    val t = currentTenant
-                    if (t == null) {
-                        ErrorScreen("Missing tenant selection") { isLoggedIn.value = false }
-                    } else {
-                        val vm: StationsViewModel = hiltViewModel()
-                        StationsScreen(tenant = t, viewModel = vm, onLogout = { logout() })
+                    // When login completes (or tenant changes while logged in), move to Stations/{tenantId}
+                    LaunchedEffect(
+                        isLoggedIn.value, selectedTenantId.value
+                    ) {
+                        val tid = selectedTenantId.value
+                        if (isLoggedIn.value && !tid.isNullOrBlank()) {
+                            nav.navigate(Route.Stations.build(tid)) {
+                                // Remove Login from back stack
+                                popUpTo(Route.Login.route) {
+                                    inclusive = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
                     }
                 }
             }
