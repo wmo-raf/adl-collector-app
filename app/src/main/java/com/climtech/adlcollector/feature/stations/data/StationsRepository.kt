@@ -5,6 +5,7 @@ import com.climtech.adlcollector.core.data.db.AppDatabase
 import com.climtech.adlcollector.core.data.db.StationEntity
 import com.climtech.adlcollector.core.data.network.AuthInterceptor
 import com.climtech.adlcollector.core.data.network.NetworkModule
+import com.climtech.adlcollector.core.data.network.TokenAuthenticator
 import com.climtech.adlcollector.core.model.TenantConfig
 import com.climtech.adlcollector.core.util.Result
 import com.climtech.adlcollector.core.util.asResult
@@ -25,10 +26,13 @@ class StationsRepository @Inject constructor(
             val token = authManager.getValidAccessToken(tenant)
             tenant to token
         }
-
         val client = NetworkModule.okHttpClient(
-            authInterceptor = authInterceptor
-        )
+            authInterceptor = authInterceptor,
+            enableLogging = true
+        ).newBuilder()
+            .authenticator(TokenAuthenticator(tenant, authManager)) // ← add
+            .build()
+
         val retrofit = NetworkModule.retrofit(client)
         return retrofit.create(AdlApi::class.java)
     }

@@ -28,11 +28,13 @@ import net.openid.appauth.AuthorizationServiceConfiguration
 import net.openid.appauth.GrantTypeValues
 import net.openid.appauth.ResponseTypeValues
 import net.openid.appauth.TokenRequest
+import javax.inject.Inject
 
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-
+    @Inject
+    lateinit var authManager: com.climtech.adlcollector.core.auth.AuthManager
     private lateinit var authService: AuthorizationService
     private val tenantRepo = TenantRepository()
     private lateinit var tenantLocal: TenantLocalStore
@@ -195,11 +197,8 @@ class MainActivity : ComponentActivity() {
                 isLoading.value = false
 
                 if (tokenResponse != null) {
-                    val accessToken = tokenResponse.accessToken
-                    val refreshToken = tokenResponse.refreshToken
-
-                    // Wait for DataStore commit BEFORE navigating to the stations screen
-                    tenantLocal.saveTokens(accessToken, refreshToken)
+                    // Save tokens + expiry in one place
+                    authManager.persistFromTokenResponse(tokenResponse)
 
                     isLoggedIn.value = true
                     userInfo.value = "Logged in at ${System.currentTimeMillis()}"
