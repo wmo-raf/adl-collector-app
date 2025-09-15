@@ -1,18 +1,28 @@
 package com.climtech.adlcollector.feature.stations.data
 
+
 import com.climtech.adlcollector.core.auth.AuthManager
 import com.climtech.adlcollector.core.data.db.AppDatabase
 import com.climtech.adlcollector.core.data.db.StationEntity
+import com.climtech.adlcollector.core.data.network.ApiGuardInterceptor
 import com.climtech.adlcollector.core.data.network.AuthInterceptor
 import com.climtech.adlcollector.core.data.network.NetworkModule
 import com.climtech.adlcollector.core.data.network.TokenAuthenticator
+import com.climtech.adlcollector.core.data.network.UnexpectedBodyIOException
 import com.climtech.adlcollector.core.model.TenantConfig
+import com.climtech.adlcollector.core.net.NetworkException
 import com.climtech.adlcollector.core.util.Result
 import com.climtech.adlcollector.core.util.asResult
+import com.climtech.adlcollector.core.util.retryNetwork
 import com.climtech.adlcollector.feature.stations.data.net.AdlApi
 import com.climtech.adlcollector.feature.stations.data.net.Station
+import com.squareup.moshi.JsonDataException
+import com.squareup.moshi.JsonEncodingException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.io.IOException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import javax.inject.Inject
 
 class StationsRepository @Inject constructor(
@@ -26,12 +36,11 @@ class StationsRepository @Inject constructor(
             val token = authManager.getValidAccessToken(tenant)
             tenant to token
         }
+
         val client = NetworkModule.okHttpClient(
-            authInterceptor = authInterceptor,
-            enableLogging = true
-        ).newBuilder()
-            .authenticator(TokenAuthenticator(tenant, authManager)) // ← add
-            .build()
+            authInterceptor = authInterceptor, enableLogging = true
+        ).newBuilder().addInterceptor(ApiGuardInterceptor())
+            .authenticator(TokenAuthenticator(tenant, authManager)).build()
 
         val retrofit = NetworkModule.retrofit(client)
         return retrofit.create(AdlApi::class.java)
@@ -44,11 +53,32 @@ class StationsRepository @Inject constructor(
         }
 
     /** Refresh from network and update cache. Safe to call in background. */
+
     suspend fun refreshStations(tenant: TenantConfig): Result<Unit> {
         val url = tenant.stationLinkEndpoint.toString()
         val api = apiFor(tenant)
 
-        return when (val res = api.getStations(url).asResult()) {
+        val res: Result<List<Station>> = retryNetwork {
+            try {
+                api.getStations(url).asResult()
+            } catch (e: UnexpectedBodyIOException) {
+                Result.Err(NetworkException.UnexpectedBody(e.mime, e.snippet))
+            } catch (e: UnknownHostException) {
+                Result.Err(NetworkException.Offline)
+            } catch (e: SocketTimeoutException) {
+                Result.Err(NetworkException.Timeout)
+            } catch (e: JsonEncodingException) {
+                Result.Err(NetworkException.Serialization(e))
+            } catch (e: JsonDataException) {
+                Result.Err(NetworkException.Serialization(e))
+            } catch (e: IOException) {
+                Result.Err(NetworkException.Unknown(e))
+            } catch (e: Throwable) {
+                Result.Err(NetworkException.Unknown(e))
+            }
+        }
+
+        return when (res) {
             is Result.Ok -> {
                 val now = System.currentTimeMillis()
                 val entities = res.value.map { s ->

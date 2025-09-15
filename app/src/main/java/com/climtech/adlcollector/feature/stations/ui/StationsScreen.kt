@@ -17,6 +17,8 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -24,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -68,6 +71,15 @@ fun StationsContent(
     onRetry: () -> Unit,
     onLogout: () -> Unit
 ) {
+
+
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(state.error) {
+        state.error?.let { snackbarHostState.showSnackbar(it) }
+    }
+
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -77,7 +89,8 @@ fun StationsContent(
                     TextButton(onClick = onLogout) { Text("Logout") }
                 }
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Box(
             modifier = Modifier
@@ -104,7 +117,7 @@ fun StationsContent(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Text(state.error!!, color = MaterialTheme.colorScheme.error)
+                        Text(state.error, color = MaterialTheme.colorScheme.error)
                         Spacer(Modifier.height(12.dp))
                         Button(onClick = onRetry) { Text("Retry") }
                     }

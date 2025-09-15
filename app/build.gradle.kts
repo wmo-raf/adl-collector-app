@@ -67,6 +67,7 @@ dependencies {
     implementation(libs.okhttp.core)
     implementation(libs.okhttp.logging)
     implementation(libs.moshi.core)
+    implementation(libs.androidx.material3)
     // Moshi code-gen (annotation processor)
     ksp(libs.moshi.kotlin.codegen)
 

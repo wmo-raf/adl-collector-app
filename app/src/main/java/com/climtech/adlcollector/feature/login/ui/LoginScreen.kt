@@ -2,37 +2,110 @@ package com.climtech.adlcollector.feature.login.ui
 
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.climtech.adlcollector.core.model.TenantConfig
 import com.climtech.adlcollector.core.ui.theme.ADLCollectorTheme
+
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TenantSelector(
+    tenants: List<TenantConfig>,
+    selectedId: String?,
+    onSelectTenant: (String) -> Unit,
+    onRefreshTenants: () -> Unit
+) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val ordered = remember(tenants) { tenants.sortedByDescending { it.enabled } }
+    val selectedTenant = ordered.firstOrNull { it.id == selectedId }
+    val currentName = selectedTenant?.name
+        ?: if (ordered.isNotEmpty()) "Select Country" else "No Instances"
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { if (ordered.isNotEmpty()) expanded = !expanded },
+            modifier = Modifier.weight(1f)
+        ) {
+            OutlinedTextField(
+                value = currentName,
+                onValueChange = { /* readOnly */ },
+                readOnly = true,
+                label = { Text("ADL Instance") },
+                supportingText = {
+                    if (selectedTenant != null) Text(selectedTenant.baseUrl)
+                },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                modifier = Modifier
+                    .menuAnchor()
+                    .fillMaxWidth(),
+                enabled = ordered.isNotEmpty(),
+                singleLine = true
+            )
+
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.heightIn(max = 320.dp)
+            ) {
+                ordered.forEach { t ->
+                    val label = if (t.enabled) t.name else "${t.name} (disabled)"
+                    DropdownMenuItem(
+                        text = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        onClick = {
+                            if (t.enabled) onSelectTenant(t.id)
+                            expanded = false
+                        },
+                        enabled = t.enabled,
+                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.width(8.dp))
+        IconButton(onClick = onRefreshTenants) {
+            Icon(Icons.Filled.Refresh, contentDescription = "Refresh tenants")
+        }
+    }
+}
+
 
 @Composable
 fun LoginScreen(
@@ -64,33 +137,13 @@ fun LoginScreen(
                 ?: if (tenants.isNotEmpty()) "Select Country" else "No Instances"
 
             if (tenants.isNotEmpty()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        Button(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text(currentName)
-                        }
-                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                            tenants.forEach { t ->
-                                val label = if (t.enabled) t.name else "${t.name} (disabled)"
-                                DropdownMenuItem(text = { Text(label) }, onClick = {
-                                    if (t.enabled) onSelectTenant(t.id)
-                                    // if disabled, keep selection unchanged
-                                    expanded = false
-                                })
-                            }
-                        }
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    IconButton(onClick = onRefreshTenants) {
-                        Icon(
-                            imageVector = Icons.Filled.Refresh,
-                            contentDescription = "Refresh tenants"
-                        )
-                    }
-                }
+                TenantSelector(
+                    tenants = tenants,
+                    selectedId = selectedId,
+                    onSelectTenant = onSelectTenant,
+                    onRefreshTenants = onRefreshTenants
+                )
+
             } else {
                 Button(onClick = onRefreshTenants, modifier = Modifier.fillMaxWidth()) {
                     Text("Refresh Tenants")
@@ -115,23 +168,21 @@ private fun sampleTenants(): List<TenantConfig> = listOf(
     TenantConfig(
         id = "ke",
         name = "Kenya",
-        baseUrl = "https://ke.adl.example.org/",
+        baseUrl = "https://ke.adl.example.org",
         clientId = "mobile-app",
         enabled = true,
         visible = true
-    ),
-    TenantConfig(
+    ), TenantConfig(
         id = "tz",
         name = "Tanzania",
-        baseUrl = "https://tz.adl.example.org/",
+        baseUrl = "https://tz.adl.example.org",
         clientId = "mobile-app",
         enabled = false,        // show disabled state in menu
         visible = true
-    ),
-    TenantConfig(
+    ), TenantConfig(
         id = "ug",
         name = "Uganda",
-        baseUrl = "https://ug.adl.example.org/",
+        baseUrl = "https://ug.adl.example.org",
         clientId = "mobile-app",
         enabled = true,
         visible = true
@@ -147,15 +198,12 @@ private fun PreviewLoginLight() {
             selectedId = "ke",
             onSelectTenant = {},
             onLoginClick = {},
-            onRefreshTenants = {}
-        )
+            onRefreshTenants = {})
     }
 }
 
 @Preview(
-    showBackground = true,
-    name = "Login • Dark",
-    uiMode = Configuration.UI_MODE_NIGHT_YES
+    showBackground = true, name = "Login • Dark", uiMode = Configuration.UI_MODE_NIGHT_YES
 )
 @Composable
 private fun PreviewLoginDark() {
@@ -165,8 +213,7 @@ private fun PreviewLoginDark() {
             selectedId = "ke",
             onSelectTenant = {},
             onLoginClick = {},
-            onRefreshTenants = {}
-        )
+            onRefreshTenants = {})
     }
 }
 
@@ -179,7 +226,6 @@ private fun PreviewLoginEmpty() {
             selectedId = null,
             onSelectTenant = {},
             onLoginClick = {},
-            onRefreshTenants = {}
-        )
+            onRefreshTenants = {})
     }
 }

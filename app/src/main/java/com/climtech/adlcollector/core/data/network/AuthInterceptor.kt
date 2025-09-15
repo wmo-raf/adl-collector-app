@@ -1,5 +1,6 @@
 package com.climtech.adlcollector.core.data.network
 
+import android.util.Log
 import com.climtech.adlcollector.core.model.TenantConfig
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -13,11 +14,10 @@ class AuthInterceptor(
 ) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         // We need a blocking call to fetch token in an OkHttp interceptor.
-        val (tenant, token) = runCatching {
-            kotlinx.coroutines.runBlocking { authManagerProvider() }
-        }.getOrElse { throw it }
-
-        val request = chain.request().newBuilder().header("Authorization", "Bearer $token").build()
-        return chain.proceed(request)
+        val (tenant, token) = kotlinx.coroutines.runBlocking { authManagerProvider() }
+        Log.d("AuthInterceptor", "tenant=${tenant.id} adding Authorization")
+        return chain.proceed(
+            chain.request().newBuilder().header("Authorization", "Bearer $token").build()
+        )
     }
 }

@@ -3,6 +3,8 @@ package com.climtech.adlcollector.feature.stations.presentation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.climtech.adlcollector.core.model.TenantConfig
+import com.climtech.adlcollector.core.net.NetworkException
+import com.climtech.adlcollector.core.util.Result
 import com.climtech.adlcollector.feature.stations.data.StationsRepository
 import com.climtech.adlcollector.feature.stations.data.net.Station
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -13,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
 
 data class StationsUiState(
     val loading: Boolean = false,       // network refresh in flight
@@ -45,11 +48,39 @@ class StationsViewModel @Inject constructor(
         viewModelScope.launch {
             if (showSpinner) _state.update { it.copy(loading = true, error = null) }
             val result = repo.refreshStations(tenant)
-            _state.update {
-                it.copy(
-                    loading = false, error = result.exceptionOrNull()?.message
-                )
+            _state.update { st ->
+                when (result) {
+                    is Result.Ok -> st.copy(loading = false, error = null)
+                    is Result.Err -> {
+                        st.copy(loading = false, error = result.error.toUserMessage())
+                    }
+                }
             }
         }
+    }
+
+
+    private fun Throwable.toUserMessage(): String = when (this) {
+        is NetworkException.Offline -> "You’re offline. Check your connection and try again."
+
+        is NetworkException.Timeout -> "Request timed out. Please try again."
+
+        is NetworkException.Unauthorized -> "Session expired. Please log in again."
+
+        is NetworkException.Forbidden -> "You don’t have permission to access stations."
+
+        is NetworkException.NotFound -> "Stations endpoint not found."
+
+        is NetworkException.Server -> "Server error (${this.code}). Please try again later."
+
+        is NetworkException.Client -> this.body ?: "Request error (${this.code})."
+
+        is NetworkException.EmptyBody -> "Server returned no data."
+
+        is NetworkException.Serialization -> "We couldn’t read the server response."
+
+        is NetworkException.UnexpectedBody -> "The server returned an unexpected response."
+
+        else -> message ?: "Something went wrong."
     }
 }

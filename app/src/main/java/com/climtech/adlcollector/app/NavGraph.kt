@@ -54,7 +54,7 @@ fun AppNavGraph(
                     onRefreshTenants = onRefreshTenants
                 )
             } else {
-                val vm: StationsViewModel = hiltViewModel()
+                val vm: StationsViewModel = hiltViewModel(key = "stations-$tenantId")
                 StationsScreen(
                     tenant = tenant, viewModel = vm, onLogout = onLogout
                 )

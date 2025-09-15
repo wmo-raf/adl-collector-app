@@ -197,8 +197,8 @@ class MainActivity : ComponentActivity() {
                 isLoading.value = false
 
                 if (tokenResponse != null) {
-                    // Save tokens + expiry in one place
-                    authManager.persistFromTokenResponse(tokenResponse)
+                    val tenant = currentTenant ?: error("Missing tenant during token save")
+                    authManager.persistFromTokenResponse(tenant, tokenResponse)
 
                     isLoggedIn.value = true
                     userInfo.value = "Logged in at ${System.currentTimeMillis()}"
@@ -258,7 +258,7 @@ class MainActivity : ComponentActivity() {
                         onLogout = {
                             // Clear local state & navigate back to Login
                             logout()
-                            nav.navigate(com.climtech.adlcollector.app.Route.Login.route) {
+                            nav.navigate(Route.Login.route) {
                                 // Clear the back stack
                                 popUpTo(nav.graph.startDestinationId) { inclusive = true }
                                 launchSingleTop = true
