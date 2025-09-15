@@ -23,8 +23,11 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-
-            <!-- OAuth redirect intent filter -->
+        </activity>
+        <activity
+            android:name="net.openid.appauth.RedirectUriReceiverActivity"
+            android:exported="true"
+            android:theme="@style/Theme.AppAuthRedirect">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
 

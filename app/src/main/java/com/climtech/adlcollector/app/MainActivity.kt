@@ -1,7 +1,7 @@
 package com.climtech.adlcollector.app
 
+import android.app.PendingIntent
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -22,10 +22,11 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import net.openid.appauth.AuthorizationException
 import net.openid.appauth.AuthorizationRequest
+import net.openid.appauth.AuthorizationResponse
 import net.openid.appauth.AuthorizationService
 import net.openid.appauth.AuthorizationServiceConfiguration
-import net.openid.appauth.GrantTypeValues
 import net.openid.appauth.ResponseTypeValues
 import net.openid.appauth.TokenRequest
 import javax.inject.Inject
@@ -49,6 +50,21 @@ class MainActivity : ComponentActivity() {
     private var errorMessage = mutableStateOf("")
     private var tenants = mutableStateOf<List<TenantConfig>>(emptyList())
     private var selectedTenantId = mutableStateOf<String?>(null)
+
+    private var authInFlight = false
+
+    private companion object {
+        private const val ACTION_AUTH_COMPLETED = "com.climtech.adlcollector.AUTH_COMPLETED"
+        private const val ACTION_AUTH_CANCELLED = "com.climtech.adlcollector.AUTH_CANCELLED"
+    }
+
+    private fun pendingIntent(action: String, requestCode: Int) = PendingIntent.getActivity(
+        this,
+        requestCode,
+        Intent(this, MainActivity::class.java).setAction(action),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+    )
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -86,9 +102,23 @@ class MainActivity : ComponentActivity() {
         // Load tenants from Firestore
         loadTenants()
 
-        // Handle possible redirect
-        intent?.let { handleIntent(it) }
         updateUI()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (authInFlight && isLoading.value) {
+            // if we’re back in the app and no callback has arrived within ~1s, treat as cancel
+            lifecycleScope.launch {
+                kotlinx.coroutines.delay(1000)
+                if (authInFlight && isLoading.value) {
+                    authInFlight = false
+                    isLoading.value = false
+                    errorMessage.value = "Login cancelled."
+                    updateUI()
+                }
+            }
+        }
     }
 
     private fun loadTenants(preserveSelection: Boolean = true) {
@@ -123,13 +153,68 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
-        intent?.let { handleIntent(it) }
-    }
+        when (intent?.action) {
+            ACTION_AUTH_CANCELLED -> {
+                authInFlight = false
+                isLoading.value = false
+                errorMessage.value = "Login cancelled."
+                updateUI()
+            }
 
-    private fun handleIntent(intent: Intent) {
-        if (intent.action == Intent.ACTION_VIEW && intent.data != null) {
-            Log.i("OAUTH_APP", "OAuth redirect detected: ${intent.data}")
-            handleAuthorizationRedirectUri(intent.data!!)
+            ACTION_AUTH_COMPLETED -> {
+                authInFlight = false
+                // Extract AppAuth response/error
+                val resp = AuthorizationResponse.fromIntent(intent)
+
+                val ex = AuthorizationException.fromIntent(intent)
+
+                Log.d(
+                    "OAUTH_APP",
+                    "onNewIntent action=${intent.action} hasResp=${resp != null} hasErr=${ex != null}"
+                )
+
+                if (ex != null) {
+                    isLoading.value = false
+                    errorMessage.value = "Login failed: ${ex.errorDescription ?: ex.error}"
+                    updateUI()
+                    return
+                }
+                if (resp == null) {
+                    isLoading.value = false
+                    errorMessage.value = "Login failed: empty response"
+                    updateUI()
+                    return
+                }
+
+                // Exchange the code for tokens
+                val tokenRequest: TokenRequest = resp.createTokenExchangeRequest()
+                isLoading.value = true
+                updateUI()
+
+                authService.performTokenRequest(tokenRequest) { tokenResponse, tokenEx ->
+                    lifecycleScope.launch {
+                        isLoading.value = false
+                        if (tokenEx != null || tokenResponse == null) {
+                            errorMessage.value =
+                                "Token exchange failed: ${tokenEx?.errorDescription ?: tokenEx?.error ?: "Unknown error"}"
+                            updateUI()
+                            return@launch
+                        }
+
+                        // Persist tokens for the selected tenant (per-tenant storage)
+                        val tenant = currentTenant ?: run {
+                            errorMessage.value = "Missing tenant during token save."
+                            updateUI(); return@launch
+                        }
+                        authManager.persistFromTokenResponse(tenant, tokenResponse)
+
+                        isLoggedIn.value = true
+                        userInfo.value = "Logged in at ${System.currentTimeMillis()}"
+                        errorMessage.value = ""
+                        updateUI()
+                    }
+                }
+            }
         }
     }
 
@@ -150,8 +235,7 @@ class MainActivity : ComponentActivity() {
             updateUI()
 
             val serviceConfig = AuthorizationServiceConfiguration(
-                tenant.authorizeEndpoint, // Uri from TenantConfig
-                tenant.tokenEndpoint      // Uri from TenantConfig
+                tenant.authorizeEndpoint, tenant.tokenEndpoint
             )
 
             val authRequest = AuthorizationRequest.Builder(
@@ -159,58 +243,22 @@ class MainActivity : ComponentActivity() {
             ).setScopes(*tenant.scopes.toTypedArray()).build()
 
             currentAuthRequest = authRequest
-            val intent = authService.getAuthorizationRequestIntent(authRequest)
-            startActivity(intent)
+            authInFlight = true
+
+            // Build success + cancel intents
+            val complete = pendingIntent(ACTION_AUTH_COMPLETED, 1001)
+            val cancelled = pendingIntent(ACTION_AUTH_CANCELLED, 1002)
+
+            // Launch the browser-based flow
+            authService.performAuthorizationRequest(authRequest, complete, cancelled)
         } catch (e: Exception) {
+            authInFlight = false
             isLoading.value = false
             errorMessage.value = "Login error: ${e.message}"
             updateUI()
         }
     }
 
-    private fun handleAuthorizationRedirectUri(uri: Uri) {
-        val code = uri.getQueryParameter("code")
-        val state = uri.getQueryParameter("state")
-        val launchedRequest = currentAuthRequest
-        val tenant = currentTenant
-
-        if (code.isNullOrBlank() || launchedRequest == null || tenant == null) {
-            errorMessage.value = "Auth flow incomplete. Please try again."
-            updateUI(); return
-        }
-        if (state != launchedRequest.state) {
-            errorMessage.value = "Security error: state mismatch"
-            updateUI(); return
-        }
-
-        val tokenRequest = TokenRequest.Builder(
-            launchedRequest.configuration, tenant.clientId
-        ).setGrantType(GrantTypeValues.AUTHORIZATION_CODE).setAuthorizationCode(code)
-            .setRedirectUri(tenant.redirectUri.toUri())
-            .setCodeVerifier(launchedRequest.codeVerifier).build()
-
-        isLoading.value = true
-        updateUI()
-
-        authService.performTokenRequest(tokenRequest) { tokenResponse, ex ->
-            lifecycleScope.launch {
-                isLoading.value = false
-
-                if (tokenResponse != null) {
-                    val tenant = currentTenant ?: error("Missing tenant during token save")
-                    authManager.persistFromTokenResponse(tenant, tokenResponse)
-
-                    isLoggedIn.value = true
-                    userInfo.value = "Logged in at ${System.currentTimeMillis()}"
-                    errorMessage.value = ""
-                    updateUI()
-                } else {
-                    errorMessage.value = "Token exchange failed: ${ex?.message ?: "Unknown error"}"
-                    updateUI()
-                }
-            }
-        }
-    }
 
     private fun logout() {
         isLoggedIn.value = false
@@ -248,6 +296,7 @@ class MainActivity : ComponentActivity() {
                         startDestination = startDestination,
                         tenants = tenants.value,
                         selectedTenantId = selectedTenantId.value,
+                        authInFlight = authInFlight,
                         onSelectTenant = { id ->
                             selectedTenantId.value = id
                             currentTenant = tenants.value.firstOrNull { it.id == id }

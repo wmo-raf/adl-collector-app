@@ -111,6 +111,7 @@ fun TenantSelector(
 fun LoginScreen(
     tenants: List<TenantConfig>,
     selectedId: String?,
+    loginBusy: Boolean,
     onSelectTenant: (String) -> Unit,
     onLoginClick: () -> Unit,
     onRefreshTenants: () -> Unit
@@ -155,7 +156,7 @@ fun LoginScreen(
             Button(
                 onClick = onLoginClick,
                 modifier = Modifier.fillMaxWidth(),
-                enabled = selectedTenant != null && selectedTenant.enabled
+                enabled = !loginBusy && selectedTenant != null && selectedTenant.enabled
             ) {
                 Text("Login")
             }
@@ -196,6 +197,7 @@ private fun PreviewLoginLight() {
         LoginScreen(
             tenants = sampleTenants(),
             selectedId = "ke",
+            loginBusy = false,
             onSelectTenant = {},
             onLoginClick = {},
             onRefreshTenants = {})
@@ -211,6 +213,7 @@ private fun PreviewLoginDark() {
         LoginScreen(
             tenants = sampleTenants(),
             selectedId = "ke",
+            loginBusy = false,
             onSelectTenant = {},
             onLoginClick = {},
             onRefreshTenants = {})
@@ -224,6 +227,7 @@ private fun PreviewLoginEmpty() {
         LoginScreen(
             tenants = emptyList(),
             selectedId = null,
+            loginBusy = false,
             onSelectTenant = {},
             onLoginClick = {},
             onRefreshTenants = {})

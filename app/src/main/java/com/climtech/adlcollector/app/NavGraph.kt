@@ -19,6 +19,7 @@ fun AppNavGraph(
     startDestination: String,
     tenants: List<TenantConfig>,
     selectedTenantId: String?,
+    authInFlight: Boolean,
     onSelectTenant: (String) -> Unit,
     onRefreshTenants: () -> Unit,
     onLoginClick: () -> Unit,
@@ -31,6 +32,7 @@ fun AppNavGraph(
             LoginScreen(
                 tenants = tenants,
                 selectedId = selectedTenantId,
+                loginBusy = authInFlight,
                 onSelectTenant = onSelectTenant,
                 onLoginClick = onLoginClick,
                 onRefreshTenants = onRefreshTenants
@@ -49,6 +51,7 @@ fun AppNavGraph(
                 LoginScreen(
                     tenants = tenants,
                     selectedId = selectedTenantId,
+                    loginBusy = authInFlight,
                     onSelectTenant = onSelectTenant,
                     onLoginClick = onLoginClick,
                     onRefreshTenants = onRefreshTenants
