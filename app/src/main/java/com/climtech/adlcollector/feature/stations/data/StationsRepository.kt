@@ -60,7 +60,14 @@ class StationsRepository @Inject constructor(
 
         val res: Result<List<Station>> = retryNetwork {
             try {
-                api.getStations(url).asResult()
+                // --- normalize 204 / null body to empty list ---
+                val raw = api.getStations(url)
+                val normalized =
+                    if (raw.isSuccessful && (raw.code() == 204 || raw.body() == null)) {
+                        retrofit2.Response.success(emptyList<Station>())
+                    } else raw
+
+                normalized.asResult()
             } catch (e: UnexpectedBodyIOException) {
                 Result.Err(NetworkException.UnexpectedBody(e.mime, e.snippet))
             } catch (e: UnknownHostException) {
@@ -90,12 +97,12 @@ class StationsRepository @Inject constructor(
                         updatedAt = now
                     )
                 }
-                dao.clearForTenant(tenant.id)
-                dao.upsertAll(entities)
+                // --- transactional replace (clears when list is empty) ---
+                dao.replaceForTenant(tenant.id, entities)
                 Result.Ok(Unit)
             }
 
-            is Result.Err -> Result.Err(res.error)
+            is Result.Err -> Result.Err(res.error) // keep old cache on error
         }
     }
 }
