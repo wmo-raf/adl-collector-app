@@ -163,15 +163,9 @@ class MainActivity : ComponentActivity() {
 
             ACTION_AUTH_COMPLETED -> {
                 authInFlight = false
-                // Extract AppAuth response/error
+
                 val resp = AuthorizationResponse.fromIntent(intent)
-
                 val ex = AuthorizationException.fromIntent(intent)
-
-                Log.d(
-                    "OAUTH_APP",
-                    "onNewIntent action=${intent.action} hasResp=${resp != null} hasErr=${ex != null}"
-                )
 
                 if (ex != null) {
                     isLoading.value = false
@@ -186,37 +180,44 @@ class MainActivity : ComponentActivity() {
                     return
                 }
 
-                // Exchange the code for tokens
-                val tokenRequest: TokenRequest = resp.createTokenExchangeRequest()
+                // We are still busy until we finish the code exchange + state updates
                 isLoading.value = true
                 updateUI()
 
+                val tokenRequest: TokenRequest = resp.createTokenExchangeRequest()
                 authService.performTokenRequest(tokenRequest) { tokenResponse, tokenEx ->
                     lifecycleScope.launch {
-                        isLoading.value = false
                         if (tokenEx != null || tokenResponse == null) {
+                            isLoading.value = false
                             errorMessage.value =
                                 "Token exchange failed: ${tokenEx?.errorDescription ?: tokenEx?.error ?: "Unknown error"}"
                             updateUI()
                             return@launch
                         }
 
-                        // Persist tokens for the selected tenant (per-tenant storage)
                         val tenant = currentTenant ?: run {
+                            isLoading.value = false
                             errorMessage.value = "Missing tenant during token save."
-                            updateUI(); return@launch
+                            updateUI()
+                            return@launch
                         }
+
+                        // Persist, then mark logged in, THEN clear loading
                         authManager.persistFromTokenResponse(tenant, tokenResponse)
 
                         isLoggedIn.value = true
                         userInfo.value = "Logged in at ${System.currentTimeMillis()}"
                         errorMessage.value = ""
+
+                        // Only now let the UI proceed (so it won't show Login)
+                        isLoading.value = false
                         updateUI()
                     }
                 }
             }
         }
     }
+
 
     private fun startLoginDynamic() {
         val tenant = currentTenant
@@ -283,19 +284,12 @@ class MainActivity : ComponentActivity() {
 
                 else -> {
                     val nav = rememberNavController()
-
-                    // Decide initial destination for this composition
-                    val startDestination =
-                        if (isLoggedIn.value && selectedTenantId.value != null) Route.Stations.build(
-                            selectedTenantId.value!!
-                        )
-                        else Route.Login.route
-
                     AppNavGraph(
                         nav = nav,
-                        startDestination = startDestination,
+                        startDestination = Route.Splash.route,
                         tenants = tenants.value,
                         selectedTenantId = selectedTenantId.value,
+                        isLoggedIn = isLoggedIn.value,
                         authInFlight = authInFlight,
                         onSelectTenant = { id ->
                             selectedTenantId.value = id
