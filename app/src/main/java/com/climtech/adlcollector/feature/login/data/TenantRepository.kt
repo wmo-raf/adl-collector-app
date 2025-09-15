@@ -3,10 +3,11 @@ package com.climtech.adlcollector.feature.login.data
 import com.climtech.adlcollector.core.model.TenantConfig
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.suspendCancellableCoroutine
+import javax.inject.Inject
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-class TenantRepository {
+class TenantRepository @Inject constructor() {
     private val db = FirebaseFirestore.getInstance()
 
     suspend fun listTenants(): List<TenantConfig> = suspendCancellableCoroutine { cont ->

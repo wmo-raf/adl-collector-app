@@ -12,11 +12,10 @@ import com.climtech.adlcollector.feature.stations.data.net.AdlApi
 import com.climtech.adlcollector.feature.stations.data.net.Station
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import javax.inject.Inject
 
-
-class StationsRepository(
-    private val authManager: AuthManager,
-    db: AppDatabase
+class StationsRepository @Inject constructor(
+    private val authManager: AuthManager, db: AppDatabase
 ) {
     private val dao = db.stationDao()
 

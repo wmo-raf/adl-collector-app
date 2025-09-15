@@ -3,11 +3,16 @@ package com.climtech.adlcollector.feature.stations.presentation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.climtech.adlcollector.core.model.TenantConfig
-import com.climtech.adlcollector.feature.stations.data.net.Station
 import com.climtech.adlcollector.feature.stations.data.StationsRepository
+import com.climtech.adlcollector.feature.stations.data.net.Station
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 data class StationsUiState(
     val loading: Boolean = false,       // network refresh in flight
@@ -15,7 +20,8 @@ data class StationsUiState(
     val error: String? = null           // last refresh error (cache still shown)
 )
 
-class StationsViewModel(
+@HiltViewModel
+class StationsViewModel @Inject constructor(
     private val repo: StationsRepository
 ) : ViewModel() {
 

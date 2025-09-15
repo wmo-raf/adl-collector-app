@@ -19,26 +19,24 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
-import com.climtech.adlcollector.core.auth.AuthManager
 import com.climtech.adlcollector.core.auth.TenantLocalStore
-import com.climtech.adlcollector.core.data.db.AppDatabase
 import com.climtech.adlcollector.core.model.TenantConfig
 import com.climtech.adlcollector.feature.login.data.TenantRepository
 import com.climtech.adlcollector.feature.login.ui.LoginScreen
-import com.climtech.adlcollector.feature.stations.data.StationsRepository
 import com.climtech.adlcollector.feature.stations.presentation.StationsViewModel
 import com.climtech.adlcollector.feature.stations.ui.StationsScreen
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import net.openid.appauth.AuthorizationRequest
 import net.openid.appauth.AuthorizationService
@@ -47,6 +45,8 @@ import net.openid.appauth.GrantTypeValues
 import net.openid.appauth.ResponseTypeValues
 import net.openid.appauth.TokenRequest
 
+
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     private lateinit var authService: AuthorizationService
@@ -117,7 +117,7 @@ class MainActivity : ComponentActivity() {
                 val visibleList = list.filter { it.visible } // hide soft-removed tenants
                 tenants.value = visibleList
 
-                // ✅ use visibleList for checks and assignment
+                // use visibleList for checks and assignment
                 selectedTenantId.value = when {
                     previouslySelectedId != null && visibleList.any { it.id == previouslySelectedId } -> previouslySelectedId
                     else -> visibleList.firstOrNull()?.id
@@ -264,10 +264,7 @@ class MainActivity : ComponentActivity() {
                     if (t == null) {
                         ErrorScreen("Missing tenant selection") { isLoggedIn.value = false }
                     } else {
-                        val db = remember { AppDatabase.get(this) }
-                        val auth = remember { AuthManager(this, tenantLocal) }
-                        val repo = remember(t.id) { StationsRepository(auth, db) }
-                        val vm = remember(t.id) { StationsViewModel(repo) }
+                        val vm: StationsViewModel = hiltViewModel()
                         StationsScreen(tenant = t, viewModel = vm, onLogout = { logout() })
                     }
                 }
@@ -277,7 +274,6 @@ class MainActivity : ComponentActivity() {
 }
 
 /* ---------- Composables ---------- */
-
 
 @Composable
 fun LoadingScreen() {
