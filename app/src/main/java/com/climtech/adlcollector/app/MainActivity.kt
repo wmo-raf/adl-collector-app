@@ -315,7 +315,7 @@ class MainActivity : ComponentActivity() {
                     ) {
                         val tid = selectedTenantId.value
                         if (isLoggedIn.value && !tid.isNullOrBlank()) {
-                            nav.navigate(Route.Stations.build(tid)) {
+                            nav.navigate(Route.Main.build(tid)) {
                                 // Remove Login from back stack
                                 popUpTo(Route.Login.route) {
                                     inclusive = true

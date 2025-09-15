@@ -11,22 +11,29 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,7 +51,8 @@ import com.climtech.adlcollector.feature.stations.presentation.StationsViewModel
 fun StationsScreen(
     tenant: TenantConfig,
     viewModel: StationsViewModel,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onOpenStation: (stationId: Long, stationName: String) -> Unit
 ) {
     val state by viewModel.state.collectAsState()
 
@@ -57,7 +65,8 @@ fun StationsScreen(
         state = state,
         onRefresh = { viewModel.refresh(tenant, showSpinner = false) },
         onRetry = { viewModel.start(tenant) },
-        onLogout = onLogout
+        onLogout = onLogout,
+        onOpenStation = onOpenStation
     )
 }
 
@@ -69,7 +78,8 @@ fun StationsContent(
     state: StationsUiState,
     onRefresh: () -> Unit,
     onRetry: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onOpenStation: (Long, String) -> Unit
 ) {
 
 
@@ -82,11 +92,27 @@ fun StationsContent(
 
     Scaffold(
         topBar = {
+            var menuOpen by remember { mutableStateOf(false) }
+
             TopAppBar(
-                title = { Text("Stations • $tenantName") },
+                title = { Text("Stations") },
                 actions = {
-                    TextButton(onClick = { onRefresh() }) { Text("Refresh") }
-                    TextButton(onClick = onLogout) { Text("Logout") }
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = "More")
+                    }
+                    DropdownMenu(
+                        expanded = menuOpen,
+                        onDismissRequest = { menuOpen = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Refresh List") },
+                            onClick = {
+                                menuOpen = false
+                                onRefresh()
+                            }
+                        )
+                        // Add more menu items here later (e.g., "Filter", "Sort", etc.)
+                    }
                 }
             )
         },
@@ -124,7 +150,7 @@ fun StationsContent(
                 }
 
                 else -> {
-                    StationsList(state.stations)
+                    StationsList(state.stations, onOpenStation)
                 }
             }
         }
@@ -132,7 +158,7 @@ fun StationsContent(
 }
 
 @Composable
-private fun StationsList(itemsList: List<Station>) {
+private fun StationsList(itemsList: List<Station>, onOpenStation: (Long, String) -> Unit) {
     if (itemsList.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("No stations available.")
@@ -141,7 +167,12 @@ private fun StationsList(itemsList: List<Station>) {
     }
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(itemsList) { s ->
-            ElevatedCard(Modifier.fillMaxWidth()) {
+            ElevatedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(Modifier),
+                onClick = { onOpenStation(s.id, s.name) } // <— click!
+            ) {
                 Column(Modifier.padding(16.dp)) {
                     Text(
                         s.name,
@@ -169,59 +200,36 @@ private fun sampleStations(): List<Station> = listOf(
 private fun PreviewStationsLoaded() {
     ADLCollectorTheme {
         StationsContent(
-            tenantName = "Kenya",
-            state = StationsUiState(
-                loading = false,
-                stations = sampleStations(),
-                error = null
-            ),
-            onRefresh = {},
-            onRetry = {},
-            onLogout = {}
-        )
+            tenantName = "Kenya", state = StationsUiState(
+                loading = false, stations = sampleStations(), error = null
+            ), onRefresh = {}, onRetry = {}, onLogout = {}, onOpenStation = { _, _ -> })
     }
 }
 
 @Preview(
-    showBackground = true,
-    name = "Stations • Loading",
-    uiMode = Configuration.UI_MODE_NIGHT_NO
+    showBackground = true, name = "Stations • Loading", uiMode = Configuration.UI_MODE_NIGHT_NO
 )
 @Composable
 private fun PreviewStationsLoading() {
     ADLCollectorTheme {
         StationsContent(
-            tenantName = "Kenya",
-            state = StationsUiState(
-                loading = true,
-                stations = emptyList(),
-                error = null
-            ),
-            onRefresh = {},
-            onRetry = {},
-            onLogout = {}
-        )
+            tenantName = "Kenya", state = StationsUiState(
+                loading = true, stations = emptyList(), error = null
+            ), onRefresh = {}, onRetry = {}, onLogout = {}, onOpenStation = { _, _ -> })
     }
 }
 
 @Preview(
-    showBackground = true,
-    name = "Stations • Error",
-    uiMode = Configuration.UI_MODE_NIGHT_YES
+    showBackground = true, name = "Stations • Error", uiMode = Configuration.UI_MODE_NIGHT_YES
 )
 @Composable
 private fun PreviewStationsError() {
     ADLCollectorTheme(darkTheme = true) {
         StationsContent(
-            tenantName = "Kenya",
-            state = StationsUiState(
+            tenantName = "Kenya", state = StationsUiState(
                 loading = false,
                 stations = emptyList(),
                 error = "Failed to fetch stations: HTTP 401"
-            ),
-            onRefresh = {},
-            onRetry = {},
-            onLogout = {}
-        )
+            ), onRefresh = {}, onRetry = {}, onLogout = {}, onOpenStation = { _, _ -> })
     }
 }
