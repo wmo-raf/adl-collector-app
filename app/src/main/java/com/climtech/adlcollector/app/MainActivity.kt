@@ -204,6 +204,7 @@ class MainActivity : ComponentActivity() {
 
                         // Persist, then mark logged in, THEN clear loading
                         authManager.persistFromTokenResponse(tenant, tokenResponse)
+                        tenantLocal.saveTenantConfig(tenant)
 
                         isLoggedIn.value = true
                         userInfo.value = "Logged in at ${System.currentTimeMillis()}"
@@ -217,7 +218,6 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
 
     private fun startLoginDynamic() {
         val tenant = currentTenant
@@ -294,7 +294,10 @@ class MainActivity : ComponentActivity() {
                         onSelectTenant = { id ->
                             selectedTenantId.value = id
                             currentTenant = tenants.value.firstOrNull { it.id == id }
-                            lifecycleScope.launch { tenantLocal.saveSelectedTenantId(id) }
+                            lifecycleScope.launch {
+                                tenantLocal.saveSelectedTenantId(id)
+                                currentTenant?.let { tenantLocal.saveTenantConfig(it) }
+                            }
                         },
                         onRefreshTenants = { loadTenants(preserveSelection = true) },
                         onLoginClick = { startLoginDynamic() },
@@ -329,4 +332,15 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+
+    private fun persistTenantSelection(
+        tenantId: String, tenant: TenantConfig, tenantLocal: TenantLocalStore
+    ) {
+        lifecycleScope.launch {
+            tenantLocal.saveSelectedTenantId(tenantId)
+            tenantLocal.saveTenantConfig(tenant)
+        }
+    }
+
 }

@@ -9,4 +9,9 @@ interface AdlApi {
     @GET
     @Headers("Accept: application/json")
     suspend fun getStations(@Url fullUrl: String): Response<List<Station>>
+
+
+    @GET
+    @Headers("Accept: application/json")
+    suspend fun getStationDetail(@Url fullUrl: String): Response<StationDetail>
 }

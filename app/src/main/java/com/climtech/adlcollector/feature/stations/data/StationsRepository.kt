@@ -3,6 +3,7 @@ package com.climtech.adlcollector.feature.stations.data
 
 import com.climtech.adlcollector.core.auth.AuthManager
 import com.climtech.adlcollector.core.data.db.AppDatabase
+import com.climtech.adlcollector.core.data.db.StationDetailEntity
 import com.climtech.adlcollector.core.data.db.StationEntity
 import com.climtech.adlcollector.core.data.network.ApiGuardInterceptor
 import com.climtech.adlcollector.core.data.network.AuthInterceptor
@@ -16,6 +17,7 @@ import com.climtech.adlcollector.core.util.asResult
 import com.climtech.adlcollector.core.util.retryNetwork
 import com.climtech.adlcollector.feature.stations.data.net.AdlApi
 import com.climtech.adlcollector.feature.stations.data.net.Station
+import com.climtech.adlcollector.feature.stations.data.net.StationDetail
 import com.squareup.moshi.JsonDataException
 import com.squareup.moshi.JsonEncodingException
 import kotlinx.coroutines.flow.Flow
@@ -26,9 +28,13 @@ import java.net.UnknownHostException
 import javax.inject.Inject
 
 class StationsRepository @Inject constructor(
-    private val authManager: AuthManager, db: AppDatabase
+    private val authManager: AuthManager,
+    db: AppDatabase,
+    private val moshi: com.squareup.moshi.Moshi
 ) {
     private val dao = db.stationDao()
+
+    private val detailDao = db.stationDetailDao()
 
     // Build an API client whose interceptor will fetch a valid token for the given tenant.
     private fun apiFor(tenant: TenantConfig): AdlApi {
@@ -45,6 +51,10 @@ class StationsRepository @Inject constructor(
         val retrofit = NetworkModule.retrofit(client)
         return retrofit.create(AdlApi::class.java)
     }
+
+    private val detailAdapter = moshi.adapter(
+        StationDetail::class.java
+    )
 
     /** UI reads this Flow for instant offline data. */
     fun stationsStream(tenantId: String): Flow<List<Station>> =
@@ -103,6 +113,52 @@ class StationsRepository @Inject constructor(
             }
 
             is Result.Err -> Result.Err(res.error) // keep old cache on error
+        }
+    }
+
+
+    /** Offline stream of station detail (null until cached). */
+    fun stationDetailStream(tenantId: String, stationId: Long): Flow<StationDetail?> =
+        detailDao.observeByKey("${tenantId}:${stationId}").map { ent ->
+            ent?.let { runCatching { detailAdapter.fromJson(it.detailJson) }.getOrNull() }
+        }
+
+
+    /** Refresh detail from network and update cache. Keeps old cache on error. */
+    suspend fun refreshStationDetail(
+        tenant: TenantConfig,
+        stationId: Long
+    ): Result<Unit> {
+        val api = apiFor(tenant)
+        val url = tenant.api(
+            "plugins", "api", "adl-collector", "station-link", stationId.toString(),
+            trailingSlash = false
+        ).toString()
+        val res = try {
+            api.getStationDetail(url).asResult()
+        } catch (t: Throwable) {
+            Result.Err(t)
+        }
+        return when (res) {
+            is Result.Ok -> {
+                val dto = res.value
+                val json = detailAdapter.toJson(dto)
+                val entity = StationDetailEntity(
+                    stationKey = "${tenant.id}:$stationId",
+                    tenantId = tenant.id,
+                    stationId = stationId,
+                    name = dto.name,
+                    timezone = dto.timezone,
+                    scheduleMode = dto.schedule.mode,
+                    detailJson = json,
+                    updatedAtMs = System.currentTimeMillis()
+                )
+                detailDao.upsert(entity)
+                Result.Ok(Unit)
+            }
+
+            is Result.Err ->
+                Result.Err(res.error)
         }
     }
 }

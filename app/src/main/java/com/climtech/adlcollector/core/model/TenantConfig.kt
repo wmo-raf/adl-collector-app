@@ -3,16 +3,20 @@ package com.climtech.adlcollector.core.model
 import android.net.Uri
 import androidx.core.net.toUri
 
+import com.squareup.moshi.JsonClass
+
+
 /**
  * Minimal tenant config sourced from Firestore.
  * All endpoints are derived from baseUrl.
  */
+@JsonClass(generateAdapter = true)
 data class TenantConfig(
     val id: String,
     val name: String,
     val baseUrl: String,
     val clientId: String,
-    val enabled: Boolean = true,          // NEW
+    val enabled: Boolean = true,
     val visible: Boolean = true,
     // allow app-level defaults; can be overridden later added to Firestore
     val scopes: List<String> = listOf("adl.read", "adl.write"),
@@ -32,11 +36,7 @@ data class TenantConfig(
     // ADL Collector stations for the logged-in user
     val stationLinkEndpoint: Uri
         get() = endpoint(
-            "plugins",
-            "api",
-            "adl-collector",
-            "station-link",
-            trailingSlash = false
+            "plugins", "api", "adl-collector", "station-link", trailingSlash = false
         )
 
     /**

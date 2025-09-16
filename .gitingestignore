@@ -1,0 +1,17 @@
+# Ignore build outputs
+/build/
+**/build/
+
+# Ignore IDE and Gradle caches
+.idea/
+.gradle/
+**/.gradle/
+
+# Ignore binaries and images
+app/src/main/res/drawable*/*
+app/src/main/res/mipmap*/*
+
+# Ignore miscellaneous
+*.log
+*.tmp
+*.lock

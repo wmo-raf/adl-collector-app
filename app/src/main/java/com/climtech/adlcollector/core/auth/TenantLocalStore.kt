@@ -1,38 +1,53 @@
 package com.climtech.adlcollector.core.auth
 
+
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.climtech.adlcollector.core.model.TenantConfig
 import com.climtech.adlcollector.tenantDataStore
+import com.squareup.moshi.Moshi
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import javax.inject.Inject
 
-class TenantLocalStore(private val context: Context) {
+class TenantLocalStore @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
 
     companion object {
         private val TENANT_ID_KEY = stringPreferencesKey("selected_tenant_id")
+        private fun accessKey(tenantId: String) = stringPreferencesKey("access_token_$tenantId")
+        private fun refreshKey(tenantId: String) = stringPreferencesKey("refresh_token_$tenantId")
+        private fun expiryKey(tenantId: String) =
+            longPreferencesKey("access_token_expiry_$tenantId")
+
+        private fun tenantConfigKey(tenantId: String) = stringPreferencesKey("tenant_cfg_$tenantId")
     }
 
-    // --- dynamic per-tenant keys ---
-    private fun accessKey(tenantId: String) = stringPreferencesKey("access_token_$tenantId")
-    private fun refreshKey(tenantId: String) = stringPreferencesKey("refresh_token_$tenantId")
-    private fun expiryKey(tenantId: String) = longPreferencesKey("access_token_expiry_$tenantId")
+    // --- Moshi for (de)serializing TenantConfig ---
+    private val moshi: Moshi = Moshi.Builder().build()
+    private val tenantAdapter = moshi.adapter(TenantConfig::class.java)
 
-    // --- selected tenant ---
+    // ----------------------------
+    // Selected tenant id
+    // ----------------------------
     suspend fun saveSelectedTenantId(id: String) {
         context.tenantDataStore.edit { it[TENANT_ID_KEY] = id }
     }
 
     val selectedTenantId: Flow<String?> = context.tenantDataStore.data.map { it[TENANT_ID_KEY] }
 
-    // --- write/clear per-tenant tokens ---
+    suspend fun getActiveTenantId(): String? = selectedTenantId.first()
+
+    // ----------------------------
+    // Per-tenant tokens
+    // ----------------------------
     suspend fun saveTokens(
-        tenantId: String,
-        access: String?,
-        refresh: String?,
-        expiresAtMs: Long?
+        tenantId: String, access: String?, refresh: String?, expiresAtMs: Long?
     ) {
         context.tenantDataStore.edit { prefs ->
             if (access != null) prefs[accessKey(tenantId)] = access else prefs.remove(
@@ -63,7 +78,6 @@ class TenantLocalStore(private val context: Context) {
         context.tenantDataStore.edit { it.clear() }
     }
 
-    // --- read per-tenant tokens ---
     fun accessTokenFlow(tenantId: String): Flow<String?> =
         context.tenantDataStore.data.map { it[accessKey(tenantId)] }
 
@@ -73,8 +87,36 @@ class TenantLocalStore(private val context: Context) {
     fun accessTokenExpiryFlow(tenantId: String): Flow<Long?> =
         context.tenantDataStore.data.map { it[expiryKey(tenantId)] }
 
-    // handy suspend getters
     suspend fun getAccessToken(tenantId: String): String? = accessTokenFlow(tenantId).first()
     suspend fun getRefreshToken(tenantId: String): String? = refreshTokenFlow(tenantId).first()
     suspend fun getAccessExpiry(tenantId: String): Long? = accessTokenExpiryFlow(tenantId).first()
+
+    /**
+     * Persist the full TenantConfig so workers (and offline code) can resolve it by ID.
+     * Call this right after the user selects/logs into a tenant.
+     */
+    suspend fun saveTenantConfig(tenant: TenantConfig) {
+        val json = tenantAdapter.toJson(tenant)
+        context.tenantDataStore.edit { prefs ->
+            prefs[tenantConfigKey(tenant.id)] = json
+        }
+    }
+
+    /**
+     * Load a TenantConfig by ID (returns null if not stored).
+     * If you later support many tenants, you can store multiple configs (one per id) as we do here.
+     */
+    suspend fun getTenantById(id: String): TenantConfig? {
+        val json = context.tenantDataStore.data.map { it[tenantConfigKey(id)] }.first()
+
+        return json?.let { runCatching { tenantAdapter.fromJson(it) }.getOrNull() }
+    }
+
+    /**
+     * Convenience: Return the active tenant (selected id -> config).
+     */
+    suspend fun getActiveTenant(): TenantConfig? {
+        val id = getActiveTenantId() ?: return null
+        return getTenantById(id)
+    }
 }
