@@ -1,12 +1,11 @@
 package com.climtech.adlcollector.core.auth
 
-
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.climtech.adlcollector.core.data.tenantDataStore
 import com.climtech.adlcollector.core.model.TenantConfig
-import com.climtech.adlcollector.tenantDataStore
 import com.squareup.moshi.Moshi
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow

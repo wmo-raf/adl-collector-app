@@ -8,8 +8,12 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.climtech.adlcollector.core.auth.AuthIntent
+import com.climtech.adlcollector.core.auth.AuthState
 import com.climtech.adlcollector.core.model.TenantConfig
 import com.climtech.adlcollector.core.ui.components.LoadingScreen
+import com.climtech.adlcollector.feature.login.presentation.TenantIntent
+import com.climtech.adlcollector.feature.login.presentation.TenantState
 import com.climtech.adlcollector.feature.login.ui.LoginScreen
 import com.climtech.adlcollector.feature.stations.presentation.StationsViewModel
 
@@ -17,22 +21,19 @@ import com.climtech.adlcollector.feature.stations.presentation.StationsViewModel
 fun AppNavGraph(
     nav: androidx.navigation.NavHostController,
     startDestination: String,
-    tenants: List<TenantConfig>,
-    selectedTenantId: String?,
-    isLoggedIn: Boolean,
-    authInFlight: Boolean,
-    onSelectTenant: (String) -> Unit,
-    onRefreshTenants: () -> Unit,
-    onLoginClick: () -> Unit,
-    onLogout: () -> Unit,
+    authState: AuthState,
+    tenantState: TenantState,
+    onAuthIntent: (AuthIntent) -> Unit,
+    onTenantIntent: (TenantIntent) -> Unit,
+    selectedTenant: TenantConfig?,
     modifier: Modifier = Modifier
 ) {
     NavHost(navController = nav, startDestination = startDestination, modifier = modifier) {
 
         composable(Route.Splash.route) {
-            LaunchedEffect(isLoggedIn, selectedTenantId) {
-                val dest = if (isLoggedIn && !selectedTenantId.isNullOrBlank()) {
-                    Route.Main.build(selectedTenantId)
+            LaunchedEffect(authState.isLoggedIn, selectedTenant?.id) {
+                val dest = if (authState.isLoggedIn && selectedTenant != null) {
+                    Route.Main.build(selectedTenant.id)
                 } else {
                     Route.Login.route
                 }
@@ -46,9 +47,9 @@ fun AppNavGraph(
         }
 
         composable(Route.Login.route) {
-            if (isLoggedIn && !selectedTenantId.isNullOrBlank()) {
+            if (authState.isLoggedIn && selectedTenant != null) {
                 LaunchedEffect(Unit) {
-                    nav.navigate(Route.Main.build(selectedTenantId)) {
+                    nav.navigate(Route.Main.build(selectedTenant.id)) {
                         popUpTo(Route.Login.route) { inclusive = true }
                         launchSingleTop = true
                         restoreState = true
@@ -57,12 +58,12 @@ fun AppNavGraph(
                 LoadingScreen()
             } else {
                 LoginScreen(
-                    tenants = tenants,
-                    selectedId = selectedTenantId,
-                    loginBusy = authInFlight,
-                    onSelectTenant = onSelectTenant,
-                    onLoginClick = onLoginClick,
-                    onRefreshTenants = onRefreshTenants
+                    tenantState = tenantState,
+                    authInProgress = authState.authInProgress,
+                    authError = authState.error,
+                    onTenantIntent = onTenantIntent,
+                    onLoginClick = { onAuthIntent(AuthIntent.StartLogin) },
+                    onClearAuthError = { onAuthIntent(AuthIntent.ClearError) }
                 )
             }
         }
@@ -73,24 +74,25 @@ fun AppNavGraph(
             arguments = listOf(navArgument("tenantId") { type = NavType.StringType })
         ) { backStackEntry ->
             val tenantId = backStackEntry.arguments!!.getString("tenantId")!!
-            val tenant = tenants.firstOrNull { it.id == tenantId }
+            val tenant = tenantState.tenants.firstOrNull { it.id == tenantId }
+
             if (tenant == null) {
-                // Fallback to login if tenant list hasn’t loaded yet
+                // Fallback to login if tenant not found
                 LoginScreen(
-                    tenants = tenants,
-                    selectedId = selectedTenantId,
-                    loginBusy = authInFlight,
-                    onSelectTenant = onSelectTenant,
-                    onLoginClick = onLoginClick,
-                    onRefreshTenants = onRefreshTenants
+                    tenantState = tenantState,
+                    authInProgress = authState.authInProgress,
+                    authError = authState.error,
+                    onTenantIntent = onTenantIntent,
+                    onLoginClick = { onAuthIntent(AuthIntent.StartLogin) },
+                    onClearAuthError = { onAuthIntent(AuthIntent.ClearError) }
                 )
             } else {
-                val vm: StationsViewModel = hiltViewModel(key = "stations-$tenantId")
+                val stationsVm: StationsViewModel = hiltViewModel(key = "stations-$tenantId")
                 MainScreen(
                     outerNav = nav,
                     tenant = tenant,
-                    stationsVm = vm,
-                    onLogout = onLogout
+                    stationsVm = stationsVm,
+                    onLogout = { onAuthIntent(AuthIntent.Logout) }
                 )
             }
         }
