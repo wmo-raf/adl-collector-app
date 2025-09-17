@@ -1,70 +1,36 @@
 package com.climtech.adlcollector.app
 
-import android.app.PendingIntent
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
-import androidx.core.net.toUri
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
-import com.climtech.adlcollector.core.auth.TenantLocalStore
-import com.climtech.adlcollector.core.model.TenantConfig
+import com.climtech.adlcollector.core.auth.OAuthManager
+import com.climtech.adlcollector.core.auth.OAuthResult
+import com.climtech.adlcollector.core.auth.TenantManager
 import com.climtech.adlcollector.core.ui.components.ErrorScreen
 import com.climtech.adlcollector.core.ui.components.LoadingScreen
-import com.climtech.adlcollector.feature.login.data.TenantRepository
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
-import net.openid.appauth.AuthorizationException
-import net.openid.appauth.AuthorizationRequest
-import net.openid.appauth.AuthorizationResponse
-import net.openid.appauth.AuthorizationService
-import net.openid.appauth.AuthorizationServiceConfiguration
-import net.openid.appauth.ResponseTypeValues
-import net.openid.appauth.TokenRequest
 import javax.inject.Inject
-
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
     @Inject
-    lateinit var authManager: com.climtech.adlcollector.core.auth.AuthManager
-    private lateinit var authService: AuthorizationService
-    private val tenantRepo = TenantRepository()
-    private lateinit var tenantLocal: TenantLocalStore
+    lateinit var oauthManager: OAuthManager
 
-    private var currentTenant: TenantConfig? = null
-    private var currentAuthRequest: AuthorizationRequest? = null
-
-    // UI state
-    private var isLoggedIn = mutableStateOf(false)
-    private var userInfo = mutableStateOf("")
-    private var isLoading = mutableStateOf(false)
-    private var errorMessage = mutableStateOf("")
-    private var tenants = mutableStateOf<List<TenantConfig>>(emptyList())
-    private var selectedTenantId = mutableStateOf<String?>(null)
-
-    private var authInFlight = false
-
-    private companion object {
-        private const val ACTION_AUTH_COMPLETED = "com.climtech.adlcollector.AUTH_COMPLETED"
-        private const val ACTION_AUTH_CANCELLED = "com.climtech.adlcollector.AUTH_CANCELLED"
-    }
-
-    private fun pendingIntent(action: String, requestCode: Int) = PendingIntent.getActivity(
-        this,
-        requestCode,
-        Intent(this, MainActivity::class.java).setAction(action),
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-    )
-
+    @Inject
+    lateinit var tenantManager: TenantManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,80 +39,45 @@ class MainActivity : ComponentActivity() {
         // Firebase init
         FirebaseApp.initializeApp(this)
 
-        // (Optional) quick connectivity check
+        // Optional connectivity check
         FirebaseFirestore.getInstance().collection("tenants").get().addOnSuccessListener { docs ->
-            Log.i(
-                "FIREBASE", "Loaded tenants snapshot: ${docs.size()}"
-            )
-        }.addOnFailureListener { e -> Log.e("FIREBASE", "Error fetching tenants", e) }
+            Log.i("FIREBASE", "Loaded tenants snapshot: ${docs.size()}")
+        }.addOnFailureListener { e ->
+            Log.e("FIREBASE", "Error fetching tenants", e)
+        }
 
-        tenantLocal = TenantLocalStore(this)
-        authService = AuthorizationService(this)
+        // Initialize OAuth service
+        oauthManager.initialize(this)
+
+        // Setup lifecycle observer for cleanup
         lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onDestroy(owner: LifecycleOwner) {
-                if (::authService.isInitialized) authService.dispose()
+                oauthManager.dispose()
             }
         })
 
-        // Observe saved tenant id; when list is present, restore selection
+        // Initialize tenant manager
         lifecycleScope.launch {
-            tenantLocal.selectedTenantId.collect { savedId ->
-                if (savedId != null && tenants.value.isNotEmpty()) {
-                    selectedTenantId.value = savedId
-                    currentTenant = tenants.value.firstOrNull { it.id == savedId }
-                    updateUI()
-                }
-            }
+            tenantManager.initialize()
         }
-
-        // Load tenants from Firestore
-        loadTenants()
 
         updateUI()
     }
 
     override fun onResume() {
         super.onResume()
-        if (authInFlight && isLoading.value) {
-            // if we’re back in the app and no callback has arrived within ~1s, treat as cancel
-            lifecycleScope.launch {
-                kotlinx.coroutines.delay(1000)
-                if (authInFlight && isLoading.value) {
-                    authInFlight = false
-                    isLoading.value = false
-                    errorMessage.value = "Login cancelled."
-                    updateUI()
-                }
-            }
-        }
+        handleResumeTimeout()
     }
 
-    private fun loadTenants(preserveSelection: Boolean = true) {
-        isLoading.value = true
-        updateUI()
-
-        val previouslySelectedId = if (preserveSelection) selectedTenantId.value else null
-
-        lifecycleScope.launch {
-            try {
-                val list = tenantRepo.listTenants()
-                val visibleList = list.filter { it.visible } // hide soft-removed tenants
-                tenants.value = visibleList
-
-                // use visibleList for checks and assignment
-                selectedTenantId.value = when {
-                    previouslySelectedId != null && visibleList.any { it.id == previouslySelectedId } -> previouslySelectedId
-                    else -> visibleList.firstOrNull()?.id
+    private fun handleResumeTimeout() {
+        val oauthState = oauthManager.state.value
+        if (oauthState.isInProgress) {
+            // If we're back in the app and no callback arrived within ~1s, treat as cancel
+            lifecycleScope.launch {
+                kotlinx.coroutines.delay(1000)
+                if (oauthManager.state.value.isInProgress) {
+                    oauthManager.handleAuthCancelled()
                 }
-
-                currentTenant = visibleList.firstOrNull { it.id == selectedTenantId.value }
-
-                isLoading.value = false
-                updateUI()
-            } catch (e: Exception) {
-                isLoading.value = false
-                errorMessage.value = "Failed to load ADL Instances: ${e.message}"
-                updateUI()
             }
         }
     }
@@ -154,131 +85,79 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         when (intent?.action) {
-            ACTION_AUTH_CANCELLED -> {
-                authInFlight = false
-                isLoading.value = false
-                errorMessage.value = "Login cancelled."
-                updateUI()
+            OAuthManager.ACTION_AUTH_CANCELLED -> {
+                oauthManager.handleAuthCancelled()
             }
 
-            ACTION_AUTH_COMPLETED -> {
-                authInFlight = false
-
-                val resp = AuthorizationResponse.fromIntent(intent)
-                val ex = AuthorizationException.fromIntent(intent)
-
-                if (ex != null) {
-                    isLoading.value = false
-                    errorMessage.value = "Login failed: ${ex.errorDescription ?: ex.error}"
-                    updateUI()
-                    return
-                }
-                if (resp == null) {
-                    isLoading.value = false
-                    errorMessage.value = "Login failed: empty response"
-                    updateUI()
-                    return
-                }
-
-                // We are still busy until we finish the code exchange + state updates
-                isLoading.value = true
-                updateUI()
-
-                val tokenRequest: TokenRequest = resp.createTokenExchangeRequest()
-                authService.performTokenRequest(tokenRequest) { tokenResponse, tokenEx ->
-                    lifecycleScope.launch {
-                        if (tokenEx != null || tokenResponse == null) {
-                            isLoading.value = false
-                            errorMessage.value =
-                                "Token exchange failed: ${tokenEx?.errorDescription ?: tokenEx?.error ?: "Unknown error"}"
-                            updateUI()
-                            return@launch
+            OAuthManager.ACTION_AUTH_COMPLETED -> {
+                lifecycleScope.launch {
+                    when (val result = oauthManager.handleAuthCompleted(intent)) {
+                        is OAuthResult.Success -> {
+                            Log.d("MainActivity", "OAuth completed successfully")
                         }
 
-                        val tenant = currentTenant ?: run {
-                            isLoading.value = false
-                            errorMessage.value = "Missing tenant during token save."
-                            updateUI()
-                            return@launch
+                        is OAuthResult.Error -> {
+                            Log.e("MainActivity", "OAuth error: ${result.message}")
                         }
 
-                        // Persist, then mark logged in, THEN clear loading
-                        authManager.persistFromTokenResponse(tenant, tokenResponse)
-                        tenantLocal.saveTenantConfig(tenant)
-
-                        isLoggedIn.value = true
-                        userInfo.value = "Logged in at ${System.currentTimeMillis()}"
-                        errorMessage.value = ""
-
-                        // Only now let the UI proceed
-                        isLoading.value = false
-                        updateUI()
+                        OAuthResult.Cancelled -> {
+                            Log.d("MainActivity", "OAuth cancelled by user")
+                        }
                     }
                 }
             }
         }
     }
 
-    private fun startLoginDynamic() {
-        val tenant = currentTenant
+    private fun startLogin() {
+        val tenant = tenantManager.state.value.selectedTenant
         if (tenant == null) {
-            errorMessage.value = "Please select an ADL Instance."
-            updateUI(); return
-        }
-        if (!tenant.enabled) {
-            errorMessage.value = "${tenant.name} is disabled."
-            updateUI(); return
+            // This should not happen given UI constraints, but handle gracefully
+            Log.w("MainActivity", "No tenant selected for login")
+            return
         }
 
-        try {
-            isLoading.value = true
-            errorMessage.value = ""
-            updateUI()
+        oauthManager.startLogin(this, tenant)
+    }
 
-            val serviceConfig = AuthorizationServiceConfiguration(
-                tenant.authorizeEndpoint, tenant.tokenEndpoint
-            )
+    private fun logout() {
+        oauthManager.logout()
+    }
 
-            val authRequest = AuthorizationRequest.Builder(
-                serviceConfig, tenant.clientId, ResponseTypeValues.CODE, tenant.redirectUri.toUri()
-            ).setScopes(*tenant.scopes.toTypedArray()).build()
-
-            currentAuthRequest = authRequest
-            authInFlight = true
-
-            // Build success + cancel intents
-            val complete = pendingIntent(ACTION_AUTH_COMPLETED, 1001)
-            val cancelled = pendingIntent(ACTION_AUTH_CANCELLED, 1002)
-
-            // Launch the browser-based flow
-            authService.performAuthorizationRequest(authRequest, complete, cancelled)
-        } catch (e: Exception) {
-            authInFlight = false
-            isLoading.value = false
-            errorMessage.value = "Login error: ${e.message}"
-            updateUI()
+    private fun onSelectTenant(tenantId: String) {
+        lifecycleScope.launch {
+            tenantManager.selectTenant(tenantId)
         }
     }
 
-
-    private fun logout() {
-        isLoggedIn.value = false
-        userInfo.value = ""
-        errorMessage.value = ""
-        updateUI()
+    private fun onRefreshTenants() {
+        lifecycleScope.launch {
+            tenantManager.loadTenants(preserveSelection = true)
+        }
     }
 
     private fun updateUI() {
         setContent {
+            val tenantState by tenantManager.state.collectAsState()
+            val oauthState by oauthManager.state.collectAsState()
+
+            val errorMessage = when {
+                tenantState.isLoading -> null
+                oauthState.isInProgress -> null
+                oauthState.isLoggedIn -> null
+                else -> tenantState.error ?: oauthState.error
+            }
+
             when {
-                errorMessage.value.isNotEmpty() -> {
-                    ErrorScreen(error = errorMessage.value) {
-                        errorMessage.value = ""
-                        loadTenants()
+                errorMessage != null -> {
+                    ErrorScreen(error = errorMessage) {
+                        oauthManager.clearError()
+                        tenantManager.clearError()
+                        onRefreshTenants()
                     }
                 }
 
-                isLoading.value -> {
+                tenantState.isLoading || oauthState.isInProgress -> {
                     LoadingScreen()
                 }
 
@@ -287,42 +166,28 @@ class MainActivity : ComponentActivity() {
                     AppNavGraph(
                         nav = nav,
                         startDestination = Route.Splash.route,
-                        tenants = tenants.value,
-                        selectedTenantId = selectedTenantId.value,
-                        isLoggedIn = isLoggedIn.value,
-                        authInFlight = authInFlight,
-                        onSelectTenant = { id ->
-                            selectedTenantId.value = id
-                            currentTenant = tenants.value.firstOrNull { it.id == id }
-                            lifecycleScope.launch {
-                                tenantLocal.saveSelectedTenantId(id)
-                                currentTenant?.let { tenantLocal.saveTenantConfig(it) }
-                            }
-                        },
-                        onRefreshTenants = { loadTenants(preserveSelection = true) },
-                        onLoginClick = { startLoginDynamic() },
+                        tenants = tenantState.tenants,
+                        selectedTenantId = tenantState.selectedTenantId,
+                        isLoggedIn = oauthState.isLoggedIn,
+                        authInFlight = oauthState.isInProgress,
+                        onSelectTenant = ::onSelectTenant,
+                        onRefreshTenants = ::onRefreshTenants,
+                        onLoginClick = ::startLogin,
                         onLogout = {
-                            // Clear local state & navigate back to Login
                             logout()
                             nav.navigate(Route.Login.route) {
-                                // Clear the back stack
                                 popUpTo(nav.graph.startDestinationId) { inclusive = true }
                                 launchSingleTop = true
                                 restoreState = false
                             }
                         })
 
-                    // When login completes (or tenant changes while logged in), move to Stations/{tenantId}
-                    LaunchedEffect(
-                        isLoggedIn.value, selectedTenantId.value
-                    ) {
-                        val tid = selectedTenantId.value
-                        if (isLoggedIn.value && !tid.isNullOrBlank()) {
-                            nav.navigate(Route.Main.build(tid)) {
-                                // Remove Login from back stack
-                                popUpTo(Route.Login.route) {
-                                    inclusive = true
-                                }
+                    // Handle navigation after successful login
+                    LaunchedEffect(oauthState.isLoggedIn, tenantState.selectedTenantId) {
+                        val tenantId = tenantState.selectedTenantId
+                        if (oauthState.isLoggedIn && !tenantId.isNullOrBlank()) {
+                            nav.navigate(Route.Main.build(tenantId)) {
+                                popUpTo(nav.graph.startDestinationId) { inclusive = true }
                                 launchSingleTop = true
                                 restoreState = true
                             }
@@ -332,15 +197,4 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
-
-    private fun persistTenantSelection(
-        tenantId: String, tenant: TenantConfig, tenantLocal: TenantLocalStore
-    ) {
-        lifecycleScope.launch {
-            tenantLocal.saveSelectedTenantId(tenantId)
-            tenantLocal.saveTenantConfig(tenant)
-        }
-    }
-
 }

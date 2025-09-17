@@ -46,25 +46,14 @@ fun AppNavGraph(
         }
 
         composable(Route.Login.route) {
-            if (isLoggedIn && !selectedTenantId.isNullOrBlank()) {
-                LaunchedEffect(Unit) {
-                    nav.navigate(Route.Main.build(selectedTenantId)) {
-                        popUpTo(Route.Login.route) { inclusive = true }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                }
-                LoadingScreen()
-            } else {
-                LoginScreen(
-                    tenants = tenants,
-                    selectedId = selectedTenantId,
-                    loginBusy = authInFlight,
-                    onSelectTenant = onSelectTenant,
-                    onLoginClick = onLoginClick,
-                    onRefreshTenants = onRefreshTenants
-                )
-            }
+            LoginScreen(
+                tenants = tenants,
+                selectedId = selectedTenantId,
+                loginBusy = authInFlight,
+                onSelectTenant = onSelectTenant,
+                onLoginClick = onLoginClick,
+                onRefreshTenants = onRefreshTenants
+            )
         }
 
         // Container that shows the BottomBar + inner tabs
@@ -75,7 +64,7 @@ fun AppNavGraph(
             val tenantId = backStackEntry.arguments!!.getString("tenantId")!!
             val tenant = tenants.firstOrNull { it.id == tenantId }
             if (tenant == null) {
-                // Fallback to login if tenant list hasn’t loaded yet
+                // Fallback to login if tenant list hasn't loaded yet
                 LoginScreen(
                     tenants = tenants,
                     selectedId = selectedTenantId,

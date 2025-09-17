@@ -2,9 +2,12 @@ package com.climtech.adlcollector.core.di
 
 import android.content.Context
 import com.climtech.adlcollector.core.auth.AuthManager
+import com.climtech.adlcollector.core.auth.OAuthManager
 import com.climtech.adlcollector.core.auth.TenantLocalStore
+import com.climtech.adlcollector.core.auth.TenantManager
 import com.climtech.adlcollector.core.data.db.AppDatabase
 import com.climtech.adlcollector.core.data.network.NetworkModule
+import com.climtech.adlcollector.feature.login.data.TenantRepository
 import com.squareup.moshi.Moshi
 import dagger.Module
 import dagger.Provides
@@ -27,6 +30,19 @@ object CoreModule {
     @Singleton
     fun provideAuthManager(@ApplicationContext ctx: Context, local: TenantLocalStore): AuthManager =
         AuthManager(ctx, local)
+
+    @Provides
+    @Singleton
+    fun provideOAuthManager(authManager: AuthManager, localStore: TenantLocalStore): OAuthManager =
+        OAuthManager(authManager, localStore)
+
+    @Provides
+    @Singleton
+    fun provideTenantManager(
+        repository: TenantRepository,
+        localStore: TenantLocalStore
+    ): TenantManager =
+        TenantManager(repository, localStore)
 
     @Provides
     @Singleton
