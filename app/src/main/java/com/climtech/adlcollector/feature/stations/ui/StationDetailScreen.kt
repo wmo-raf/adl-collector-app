@@ -14,12 +14,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
 import androidx.compose.material3.DividerDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,20 +35,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.climtech.adlcollector.core.model.TenantConfig
 import com.climtech.adlcollector.feature.stations.presentation.StationDetailViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StationDetailScreen(
-    tenant: TenantConfig,                // <— now we require tenant
+    tenant: TenantConfig,
     stationId: Long,
     stationName: String,
     onBack: () -> Unit,
     onAddObservation: () -> Unit,
-    onOpenObservation: (obsId: Long) -> Unit, // reserved for future
-    onRefresh: () -> Unit,                    // reserved for future
+    onOpenObservation: (obsId: Long) -> Unit,
+    onRefresh: () -> Unit,
     vm: StationDetailViewModel = hiltViewModel()
 ) {
     LaunchedEffect(stationId, tenant.id) { vm.start(tenant, stationId) }
@@ -58,21 +56,16 @@ fun StationDetailScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stationName) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { vm.reload() }) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
-                    }
+            TopAppBar(title = { Text(stationName) }, navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
-            )
-        }
-    ) { padding ->
+            }, actions = {
+                IconButton(onClick = { vm.reload() }) {
+                    Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+                }
+            })
+        }) { padding ->
         when {
             ui.loading -> LoadingBox(Modifier.padding(padding))
             ui.error != null -> ErrorBox(
@@ -82,9 +75,7 @@ fun StationDetailScreen(
             )
 
             ui.detail != null -> DetailBody(
-                detail = ui.detail!!,
-                padding = padding,
-                onAddObservation = onAddObservation
+                detail = ui.detail!!, padding = padding, onAddObservation = onAddObservation
             )
 
             else -> Box(

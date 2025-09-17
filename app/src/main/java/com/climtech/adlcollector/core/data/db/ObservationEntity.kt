@@ -6,7 +6,7 @@ import androidx.room.PrimaryKey
 /**
  * Offline-first queue + local history for observations.
  *
- * @param key unique per-tenant+station+obsTime (millis) to simplify upserts
+ * @param obsKey unique per-tenant+station+obsTime (millis) to simplify upserts
  * @param status LOCAL state machine for sync (QUEUED->UPLOADING->SYNCED / FAILED)
  */
 @Entity(tableName = "observations")

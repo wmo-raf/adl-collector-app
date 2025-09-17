@@ -93,7 +93,7 @@ class TenantLocalStore @Inject constructor(
 
     /**
      * Persist the full TenantConfig so workers (and offline code) can resolve it by ID.
-     * Call this right after the user selects/logs into a tenant.
+     * called right after the user selects/logs into a tenant.
      */
     suspend fun saveTenantConfig(tenant: TenantConfig) {
         val json = tenantAdapter.toJson(tenant)
@@ -104,7 +104,6 @@ class TenantLocalStore @Inject constructor(
 
     /**
      * Load a TenantConfig by ID (returns null if not stored).
-     * If you later support many tenants, you can store multiple configs (one per id) as we do here.
      */
     suspend fun getTenantById(id: String): TenantConfig? {
         val json = context.tenantDataStore.data.map { it[tenantConfigKey(id)] }.first()
@@ -113,7 +112,7 @@ class TenantLocalStore @Inject constructor(
     }
 
     /**
-     * Convenience: Return the active tenant (selected id -> config).
+     * Return the active tenant (selected id -> config).
      */
     suspend fun getActiveTenant(): TenantConfig? {
         val id = getActiveTenantId() ?: return null

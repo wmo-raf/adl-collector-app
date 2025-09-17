@@ -210,7 +210,7 @@ class MainActivity : ComponentActivity() {
                         userInfo.value = "Logged in at ${System.currentTimeMillis()}"
                         errorMessage.value = ""
 
-                        // Only now let the UI proceed (so it won't show Login)
+                        // Only now let the UI proceed
                         isLoading.value = false
                         updateUI()
                     }

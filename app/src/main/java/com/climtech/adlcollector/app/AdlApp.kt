@@ -15,12 +15,10 @@ class AdlApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
-        Log.d("AdlApp", "AdlApp onCreate() called")
     }
 
     override val workManagerConfiguration: Configuration
         get() {
-            Log.d("AdlApp", "Setting up WorkManager with HiltWorkerFactory")
             return Configuration.Builder().setWorkerFactory(workerFactory)
                 .setMinimumLoggingLevel(Log.DEBUG).build()
         }

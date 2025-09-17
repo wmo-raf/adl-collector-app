@@ -34,7 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.climtech.adlcollector.core.model.TenantConfig
 import com.climtech.adlcollector.feature.observations.presentation.ObservationFormViewModel
 import com.climtech.adlcollector.feature.observations.presentation.UiEvent
@@ -130,7 +130,6 @@ fun ObservationFormScreen(
             Button(
                 onClick = {
                     vm.submit()
-                    // onSubmitted() moved to the toast event to ensure success
                 }, enabled = ui.valid && !ui.submitting, modifier = Modifier.fillMaxWidth()
             ) {
                 Text(if (ui.submitting) "Submitting…" else "Submit")

@@ -1,16 +1,15 @@
 package com.climtech.adlcollector.core.data.network
 
+import com.squareup.moshi.Moshi
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
-import com.squareup.moshi.Moshi
 
 object NetworkModule {
 
     fun okHttpClient(
-        authInterceptor: AuthInterceptor? = null,
-        enableLogging: Boolean = true
+        authInterceptor: AuthInterceptor? = null, enableLogging: Boolean = true
     ): OkHttpClient {
         val builder = OkHttpClient.Builder()
 
@@ -30,8 +29,6 @@ object NetworkModule {
         return Retrofit.Builder()
             // Base URL is required but unused since we pass absolute @Url; keep placeholder.
             .baseUrl("https://placeholder.invalid/")
-            .addConverterFactory(MoshiConverterFactory.create(moshi))
-            .client(client)
-            .build()
+            .addConverterFactory(MoshiConverterFactory.create(moshi)).client(client).build()
     }
 }

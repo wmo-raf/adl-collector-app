@@ -7,7 +7,7 @@ import com.squareup.moshi.JsonClass
 
 
 /**
- * Minimal tenant config sourced from Firestore.
+ * Tenant config sourced from Firestore.
  * All endpoints are derived from baseUrl.
  */
 @JsonClass(generateAdapter = true)
@@ -29,7 +29,7 @@ data class TenantConfig(
     val authorizeEndpoint: Uri get() = endpoint("o", "authorize")
     val tokenEndpoint: Uri get() = endpoint("o", "token")
 
-    // (Optionals you may enable later)
+    // (Optionals)
     val revokeEndpoint: Uri get() = endpoint("o", "revoke")
     val introspectEndpoint: Uri get() = endpoint("o", "introspect")
 
@@ -51,7 +51,7 @@ data class TenantConfig(
         return buildUnderBase(baseUri, segments, trailingSlash, query)
     }
 
-    /** Same as endpoint() but for your general REST API paths. */
+    /** Same as endpoint() but for general REST API paths. */
     fun api(
         vararg segments: String,
         trailingSlash: Boolean = true,

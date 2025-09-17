@@ -82,7 +82,7 @@ fun MainScreen(
                     })
             }
 
-            // TAB: Observations (placeholder)
+            // TAB: Observations
             composable(BottomDest.Observations.route) {
                 ObservationsScreenPlaceholder()
             }

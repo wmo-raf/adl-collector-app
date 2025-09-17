@@ -17,9 +17,7 @@ import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
 open class ObservationsRepository @Inject constructor(
-    private val authManager: AuthManager,
-    db: AppDatabase,
-    private val moshi: Moshi
+    private val authManager: AuthManager, db: AppDatabase, private val moshi: Moshi
 ) {
     private val dao = db.observationDao()
     private val mapAdapter = moshi.adapter<Map<String, Any>>(Map::class.java)
@@ -30,11 +28,8 @@ open class ObservationsRepository @Inject constructor(
             tenant to token
         }
         val client = NetworkModule.okHttpClient(
-            authInterceptor = authInterceptor,
-            enableLogging = true
-        ).newBuilder()
-            .authenticator(TokenAuthenticator(tenant, authManager))
-            .build()
+            authInterceptor = authInterceptor, enableLogging = true
+        ).newBuilder().authenticator(TokenAuthenticator(tenant, authManager)).build()
         val retrofit = NetworkModule.retrofit(client)
         return retrofit.create(ObservationsApi::class.java)
     }
@@ -76,9 +71,7 @@ open class ObservationsRepository @Inject constructor(
     }
 
     suspend fun tryUploadBatch(
-        tenant: TenantConfig,
-        endpointUrl: String,
-        maxItems: Int = 10
+        tenant: TenantConfig, endpointUrl: String, maxItems: Int = 10
     ): Boolean {
         val pending = dao.nextPending(tenant.id, maxItems)
         if (pending.isEmpty()) return false
@@ -95,7 +88,6 @@ open class ObservationsRepository @Inject constructor(
                 System.currentTimeMillis()
             )
 
-            // --- refactor: avoid continue inside inline lambda ---
             val payload = toPostPayload(item)
             if (payload == null) {
                 dao.markStatus(
@@ -106,15 +98,12 @@ open class ObservationsRepository @Inject constructor(
                 )
                 continue
             }
-            // -----------------------------------------------------
 
             val res: Result<ObservationPostResponse> =
                 api.submitObservation(endpointUrl, payload).asResult()
             when (res) {
                 is Result.Ok -> dao.markSynced(
-                    item.obsKey,
-                    res.value.id,
-                    System.currentTimeMillis()
+                    item.obsKey, res.value.id, System.currentTimeMillis()
                 )
 
                 is Result.Err -> dao.markStatus(
@@ -129,9 +118,9 @@ open class ObservationsRepository @Inject constructor(
     }
 
     private fun toPostPayload(entity: ObservationEntity): ObservationPostRequest? {
-        @Suppress("UNCHECKED_CAST")
-        val parsed = runCatching { mapAdapter.fromJson(entity.payloadJson) as Map<String, Any> }
-            .getOrNull() ?: return null
+        @Suppress("UNCHECKED_CAST") val parsed =
+            runCatching { mapAdapter.fromJson(entity.payloadJson) as Map<String, Any> }.getOrNull()
+                ?: return null
 
         val recordsAny = parsed["records"] as? List<*> ?: return null
         val records = recordsAny.mapNotNull { row ->
@@ -139,8 +128,7 @@ open class ObservationsRepository @Inject constructor(
             val id = (m["variable_mapping_id"] as? Number)?.toLong() ?: return@mapNotNull null
             val valueNum = (m["value"] as? Number)?.toDouble() ?: return@mapNotNull null
             ObservationPostRequest.Record(
-                variable_mapping_id = id,
-                value = valueNum
+                variable_mapping_id = id, value = valueNum
             )
         }
         if (records.isEmpty()) return null
@@ -150,9 +138,8 @@ open class ObservationsRepository @Inject constructor(
         val reason = metadataMap["reason"] as? String
         val appVersion = (metadataMap["app_version"] as? String) ?: "0.1.0"
 
-        val idempotencyKey = java.util.UUID
-            .nameUUIDFromBytes(entity.obsKey.toByteArray())
-            .toString()
+        val idempotencyKey =
+            java.util.UUID.nameUUIDFromBytes(entity.obsKey.toByteArray()).toString()
 
         val submissionIso = java.time.Instant.ofEpochMilli(entity.updatedAtMs).toString()
         val observationIso = java.time.Instant.ofEpochMilli(entity.obsTimeUtcMs).toString()
@@ -164,7 +151,7 @@ open class ObservationsRepository @Inject constructor(
             station_link_id = entity.stationId,
             records = records,
             metadata = ObservationPostRequest.Metadata(
-                late = entity.late,                    // authoritative late flag from entity
+                late = entity.late,
                 duplicate_policy = dup,
                 reason = reason,
                 app_version = appVersion

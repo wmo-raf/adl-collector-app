@@ -28,13 +28,10 @@ fun ObservationsScreenPlaceholder() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AccountScreen(
-    tenantName: String,
-    baseUrl: String,
-    onLogout: () -> Unit
+    tenantName: String, baseUrl: String, onLogout: () -> Unit
 ) {
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Account") }) }
-    ) { padding ->
+        topBar = { TopAppBar(title = { Text("Account") }) }) { padding ->
         Column(
             Modifier
                 .padding(padding)

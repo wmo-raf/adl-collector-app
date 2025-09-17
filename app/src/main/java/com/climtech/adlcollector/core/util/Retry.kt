@@ -14,7 +14,6 @@ suspend fun <T> retryNetwork(
             is NetworkException.Timeout -> true
             is NetworkException.Server -> true                 // 5xx
             is NetworkException.Client -> err.code == 429      // Too Many Requests
-            // Optional: treat Offline as non-retriable here; better to queue with WorkManager
             else -> false
         }
     },
