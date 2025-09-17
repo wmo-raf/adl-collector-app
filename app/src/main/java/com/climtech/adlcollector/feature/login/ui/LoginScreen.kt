@@ -1,9 +1,6 @@
 package com.climtech.adlcollector.feature.login.ui
 
 import android.content.res.Configuration
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,7 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -42,20 +38,19 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.climtech.adlcollector.core.model.TenantConfig
 import com.climtech.adlcollector.core.ui.theme.ADLCollectorTheme
-import com.climtech.adlcollector.feature.login.presentation.TenantIntent
-import com.climtech.adlcollector.feature.login.presentation.TenantState
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TenantSelector(
-    tenantState: TenantState,
-    onTenantIntent: (TenantIntent) -> Unit
+    tenants: List<TenantConfig>,
+    selectedId: String?,
+    onSelectTenant: (String) -> Unit,
+    onRefreshTenants: () -> Unit
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
-    val ordered = remember(tenantState.tenants) {
-        tenantState.tenants.sortedByDescending { it.enabled }
-    }
-    val selectedTenant = ordered.firstOrNull { it.id == tenantState.selectedTenantId }
+    val ordered = remember(tenants) { tenants.sortedByDescending { it.enabled } }
+    val selectedTenant = ordered.firstOrNull { it.id == selectedId }
     val currentName = selectedTenant?.name
         ?: if (ordered.isNotEmpty()) "Select Country" else "No Instances"
 
@@ -94,7 +89,7 @@ fun TenantSelector(
                     DropdownMenuItem(
                         text = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         onClick = {
-                            if (t.enabled) onTenantIntent(TenantIntent.SelectTenant(t.id))
+                            if (t.enabled) onSelectTenant(t.id)
                             expanded = false
                         },
                         enabled = t.enabled,
@@ -105,20 +100,21 @@ fun TenantSelector(
         }
 
         Spacer(Modifier.width(8.dp))
-        IconButton(onClick = { onTenantIntent(TenantIntent.RefreshTenants) }) {
+        IconButton(onClick = onRefreshTenants) {
             Icon(Icons.Filled.Refresh, contentDescription = "Refresh tenants")
         }
     }
 }
 
+
 @Composable
 fun LoginScreen(
-    tenantState: TenantState,
-    authInProgress: Boolean,
-    authError: String?,
-    onTenantIntent: (TenantIntent) -> Unit,
+    tenants: List<TenantConfig>,
+    selectedId: String?,
+    loginBusy: Boolean,
+    onSelectTenant: (String) -> Unit,
     onLoginClick: () -> Unit,
-    onClearAuthError: () -> Unit
+    onRefreshTenants: () -> Unit
 ) {
     Scaffold { padding ->
         Column(
@@ -136,113 +132,38 @@ fun LoginScreen(
             )
             Spacer(Modifier.height(24.dp))
 
-            // Show loading state consistently at the top
-            if (tenantState.loading) {
-                androidx.compose.material3.LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth()
+            var expanded by remember { mutableStateOf(false) }
+            val selectedTenant = tenants.firstOrNull { it.id == selectedId }
+            val currentName = selectedTenant?.name
+                ?: if (tenants.isNotEmpty()) "Select Country" else "No Instances"
+
+            if (tenants.isNotEmpty()) {
+                TenantSelector(
+                    tenants = tenants,
+                    selectedId = selectedId,
+                    onSelectTenant = onSelectTenant,
+                    onRefreshTenants = onRefreshTenants
                 )
+
             } else {
-                // Maintain the same height when not loading to prevent layout shift
-                Spacer(Modifier.height(4.dp))
+                Button(onClick = onRefreshTenants, modifier = Modifier.fillMaxWidth()) {
+                    Text("Refresh Tenants")
+                }
             }
+
             Spacer(Modifier.height(16.dp))
 
-            if (tenantState.error != null) {
-                Card(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "Error loading instances:",
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                        Text(tenantState.error)
-                        Button(
-                            onClick = { onTenantIntent(TenantIntent.ClearError) },
-                            modifier = Modifier.align(Alignment.End)
-                        ) {
-                            Text("Dismiss")
-                        }
-                    }
-                }
-                Spacer(Modifier.height(16.dp))
-            }
-
-            if (authError != null) {
-                Card(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "Login error:",
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                        Text(authError)
-                        Button(
-                            onClick = onClearAuthError,
-                            modifier = Modifier.align(Alignment.End)
-                        ) {
-                            Text("Dismiss")
-                        }
-                    }
-                }
-                Spacer(Modifier.height(16.dp))
-            }
-
-            // Only show tenant selection UI when not loading
-            AnimatedVisibility(
-                visible = !tenantState.loading,
-                enter = fadeIn(),
-                exit = fadeOut()
+            Button(
+                onClick = onLoginClick,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !loginBusy && selectedTenant != null && selectedTenant.enabled
             ) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    when {
-                        tenantState.tenants.isNotEmpty() -> {
-                            TenantSelector(
-                                tenantState = tenantState,
-                                onTenantIntent = onTenantIntent
-                            )
-
-                            val selectedTenant = tenantState.tenants.firstOrNull {
-                                it.id == tenantState.selectedTenantId
-                            }
-
-                            Button(
-                                onClick = onLoginClick,
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !authInProgress &&
-                                        selectedTenant != null &&
-                                        selectedTenant.enabled
-                            ) {
-                                Text(if (authInProgress) "Logging in..." else "Login")
-                            }
-                        }
-
-                        else -> {
-                            // No tenants - show retry option
-                            Button(
-                                onClick = { onTenantIntent(TenantIntent.RefreshTenants) },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Load Instances")
-                            }
-                        }
-                    }
-                }
+                Text("Login")
             }
         }
     }
 }
+
 
 private fun sampleTenants(): List<TenantConfig> = listOf(
     TenantConfig(
@@ -269,25 +190,17 @@ private fun sampleTenants(): List<TenantConfig> = listOf(
     )
 )
 
-private fun sampleTenantState() = TenantState(
-    tenants = sampleTenants(),
-    selectedTenantId = "ke",
-    loading = false,
-    error = null
-)
-
 @Preview(showBackground = true, name = "Login • Light")
 @Composable
 private fun PreviewLoginLight() {
     ADLCollectorTheme {
         LoginScreen(
-            tenantState = sampleTenantState(),
-            authInProgress = false,
-            authError = null,
-            onTenantIntent = {},
+            tenants = sampleTenants(),
+            selectedId = "ke",
+            loginBusy = false,
+            onSelectTenant = {},
             onLoginClick = {},
-            onClearAuthError = {}
-        )
+            onRefreshTenants = {})
     }
 }
 
@@ -298,13 +211,12 @@ private fun PreviewLoginLight() {
 private fun PreviewLoginDark() {
     ADLCollectorTheme(darkTheme = true) {
         LoginScreen(
-            tenantState = sampleTenantState(),
-            authInProgress = false,
-            authError = null,
-            onTenantIntent = {},
+            tenants = sampleTenants(),
+            selectedId = "ke",
+            loginBusy = false,
+            onSelectTenant = {},
             onLoginClick = {},
-            onClearAuthError = {}
-        )
+            onRefreshTenants = {})
     }
 }
 
@@ -313,27 +225,11 @@ private fun PreviewLoginDark() {
 private fun PreviewLoginEmpty() {
     ADLCollectorTheme {
         LoginScreen(
-            tenantState = TenantState(loading = false, error = "No instances available"),
-            authInProgress = false,
-            authError = null,
-            onTenantIntent = {},
+            tenants = emptyList(),
+            selectedId = null,
+            loginBusy = false,
+            onSelectTenant = {},
             onLoginClick = {},
-            onClearAuthError = {}
-        )
-    }
-}
-
-@Preview(showBackground = true, name = "Login • With error")
-@Composable
-private fun PreviewLoginWithError() {
-    ADLCollectorTheme {
-        LoginScreen(
-            tenantState = sampleTenantState(),
-            authInProgress = false,
-            authError = "Session expired. Please try again.",
-            onTenantIntent = {},
-            onLoginClick = {},
-            onClearAuthError = {}
-        )
+            onRefreshTenants = {})
     }
 }
