@@ -10,16 +10,16 @@ sealed class Route(val route: String) {
     data object Main : Route("main/{tenantId}") {
         fun build(tenantId: String) = "main/$tenantId"
     }
-}
 
-// --------- Nested nav route builders for Main screen ---------
+    //  Station detail
+    data object StationDetail : Route("station_detail/{tenantId}/{stationId}/{stationName}") {
+        fun build(tenantId: String, stationId: Long, stationName: String) =
+            "station_detail/$tenantId/$stationId/${Uri.encode(stationName)}"
+    }
 
-object StationRoutes {
-    fun detail(stationId: Long, stationName: String): String =
-        "station/$stationId/${Uri.encode(stationName)}"
-}
-
-object ObservationRoutes {
-    fun new(stationId: Long, stationName: String): String =
-        "observation/new/$stationId/${Uri.encode(stationName)}"
+    // Observation form outside the bottom bar
+    data object ObservationForm : Route("observation_form/{tenantId}/{stationId}/{stationName}") {
+        fun build(tenantId: String, stationId: Long, stationName: String) =
+            "observation_form/$tenantId/$stationId/${Uri.encode(stationName)}"
+    }
 }

@@ -145,19 +145,37 @@ fun StationDetailScreen(
                     onOpenObservationRemote = onOpenObservation
                 )
 
-                else -> Box(
-                    Modifier
-                        .padding(padding)
-                        .fillMaxSize()
-                        .padding(24.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("No detail to show.")
+                ui.loading -> {
+                    // Show loading screen when detail is null but still loading
+                    Column(
+                        modifier = Modifier
+                            .padding(padding)
+                            .fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator()
+                        Spacer(Modifier.height(16.dp))
+                        Text("Loading station details...")
+                    }
+                }
+
+                else -> {
+                    // This should rarely happen - no detail, no loading, no error
+                    Box(
+                        Modifier
+                            .padding(padding)
+                            .fillMaxSize()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No detail to show.")
+                    }
                 }
             }
 
             // Overlay a translucent loading panel while reloading (content stays visible)
-            if (ui.loading) {
+            if (ui.loading && ui.detail != null) {
                 LoadingBox(
                     Modifier
                         .matchParentSize()
@@ -282,7 +300,7 @@ private fun DetailBody(
             }
 
             // --- Space to visually separate cards from recent list ---
-            item { Spacer(Modifier.height(4.dp)) }
+            item { Spacer(Modifier.height(24.dp)) }
 
             // --- Recent Observations (table-like list) ---
             item {
@@ -745,11 +763,12 @@ private fun EmptyState(
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .padding(vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Box(
+            modifier = Modifier.height(64.dp),
             contentAlignment = Alignment.Center
         ) {
             icon()

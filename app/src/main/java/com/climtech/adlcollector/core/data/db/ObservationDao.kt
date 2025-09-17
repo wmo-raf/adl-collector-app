@@ -40,4 +40,13 @@ interface ObservationDao {
 
     @Query("UPDATE observations SET remoteId = :remoteId, status = 'SYNCED', updatedAtMs = :updatedAt WHERE obsKey = :key")
     suspend fun markSynced(key: String, remoteId: Long?, updatedAt: Long)
+
+    @Query(
+        """
+    SELECT * FROM observations
+    WHERE tenantId = :tenantId
+    ORDER BY obsTimeUtcMs DESC
+    """
+    )
+    fun streamAllForTenant(tenantId: String): Flow<List<ObservationEntity>>
 }
