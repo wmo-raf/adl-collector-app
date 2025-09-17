@@ -68,7 +68,9 @@ class OAuthManager @Inject constructor(
         return try {
             // Clear any previous errors and start login
             _state.value = _state.value.copy(
-                isInProgress = true, error = null, isLoggedIn = false  // Reset login state
+                isInProgress = true,
+                error = null,
+                isLoggedIn = false
             )
             currentTenant = tenant
 

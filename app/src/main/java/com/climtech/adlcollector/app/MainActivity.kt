@@ -66,20 +66,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        handleResumeTimeout()
-    }
-
-    private fun handleResumeTimeout() {
-        val oauthState = oauthManager.state.value
-        if (oauthState.isInProgress) {
-            // If we're back in the app and no callback arrived within ~1s, treat as cancel
-            lifecycleScope.launch {
-                kotlinx.coroutines.delay(1000)
-                if (oauthManager.state.value.isInProgress) {
-                    oauthManager.handleAuthCancelled()
-                }
-            }
-        }
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -141,12 +127,13 @@ class MainActivity : ComponentActivity() {
             val tenantState by tenantManager.state.collectAsState()
             val oauthState by oauthManager.state.collectAsState()
 
-            val errorMessage = when {
-                tenantState.isLoading -> null
-                oauthState.isInProgress -> null
-                oauthState.isLoggedIn -> null
-                else -> tenantState.error ?: oauthState.error
-            }
+            // Simple error logic - only show errors when not in any active state
+            val showError =
+                !tenantState.isLoading && !oauthState.isInProgress && !oauthState.isLoggedIn && (tenantState.error != null || oauthState.error != null)
+
+            val errorMessage = if (showError) {
+                tenantState.error ?: oauthState.error
+            } else null
 
             when {
                 errorMessage != null -> {
