@@ -21,6 +21,7 @@ fun AppNavGraph(
     selectedTenantId: String?,
     isLoggedIn: Boolean,
     authInFlight: Boolean,
+    tenantsLoading: Boolean,
     onSelectTenant: (String) -> Unit,
     onRefreshTenants: () -> Unit,
     onLoginClick: () -> Unit,
@@ -50,6 +51,7 @@ fun AppNavGraph(
                 tenants = tenants,
                 selectedId = selectedTenantId,
                 loginBusy = authInFlight,
+                tenantsLoading = tenantsLoading,
                 onSelectTenant = onSelectTenant,
                 onLoginClick = onLoginClick,
                 onRefreshTenants = onRefreshTenants
@@ -69,6 +71,7 @@ fun AppNavGraph(
                     tenants = tenants,
                     selectedId = selectedTenantId,
                     loginBusy = authInFlight,
+                    tenantsLoading = tenantsLoading,
                     onSelectTenant = onSelectTenant,
                     onLoginClick = onLoginClick,
                     onRefreshTenants = onRefreshTenants

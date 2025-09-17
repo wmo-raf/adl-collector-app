@@ -20,6 +20,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -51,12 +52,11 @@ fun TenantSelector(
     var expanded by rememberSaveable { mutableStateOf(false) }
     val ordered = remember(tenants) { tenants.sortedByDescending { it.enabled } }
     val selectedTenant = ordered.firstOrNull { it.id == selectedId }
-    val currentName = selectedTenant?.name
-        ?: if (ordered.isNotEmpty()) "Select Country" else "No Instances"
+    val currentName =
+        selectedTenant?.name ?: if (ordered.isNotEmpty()) "Select Country" else "No Instances"
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+        modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically
     ) {
         ExposedDropdownMenuBox(
             expanded = expanded,
@@ -112,6 +112,7 @@ fun LoginScreen(
     tenants: List<TenantConfig>,
     selectedId: String?,
     loginBusy: Boolean,
+    tenantsLoading: Boolean,
     onSelectTenant: (String) -> Unit,
     onLoginClick: () -> Unit,
     onRefreshTenants: () -> Unit
@@ -132,12 +133,11 @@ fun LoginScreen(
             )
             Spacer(Modifier.height(24.dp))
 
-            var expanded by remember { mutableStateOf(false) }
-            val selectedTenant = tenants.firstOrNull { it.id == selectedId }
-            val currentName = selectedTenant?.name
-                ?: if (tenants.isNotEmpty()) "Select Country" else "No Instances"
-
-            if (tenants.isNotEmpty()) {
+            // Show loading bar when tenants are loading (initial load OR refresh)
+            if (tenantsLoading || tenants.isEmpty()) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            } else {
+                // Show normal tenant selection UI
                 TenantSelector(
                     tenants = tenants,
                     selectedId = selectedId,
@@ -145,20 +145,16 @@ fun LoginScreen(
                     onRefreshTenants = onRefreshTenants
                 )
 
-            } else {
-                Button(onClick = onRefreshTenants, modifier = Modifier.fillMaxWidth()) {
-                    Text("Refresh Tenants")
+                Spacer(Modifier.height(16.dp))
+
+                val selectedTenant = tenants.firstOrNull { it.id == selectedId }
+                Button(
+                    onClick = onLoginClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !loginBusy && selectedTenant != null && selectedTenant.enabled
+                ) {
+                    Text("Login")
                 }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            Button(
-                onClick = onLoginClick,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !loginBusy && selectedTenant != null && selectedTenant.enabled
-            ) {
-                Text("Login")
             }
         }
     }
@@ -198,6 +194,7 @@ private fun PreviewLoginLight() {
             tenants = sampleTenants(),
             selectedId = "ke",
             loginBusy = false,
+            tenantsLoading = false,
             onSelectTenant = {},
             onLoginClick = {},
             onRefreshTenants = {})
@@ -214,6 +211,7 @@ private fun PreviewLoginDark() {
             tenants = sampleTenants(),
             selectedId = "ke",
             loginBusy = false,
+            tenantsLoading = false,
             onSelectTenant = {},
             onLoginClick = {},
             onRefreshTenants = {})
@@ -228,6 +226,7 @@ private fun PreviewLoginEmpty() {
             tenants = emptyList(),
             selectedId = null,
             loginBusy = false,
+            tenantsLoading = true,
             onSelectTenant = {},
             onLoginClick = {},
             onRefreshTenants = {})

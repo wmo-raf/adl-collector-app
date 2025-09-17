@@ -157,7 +157,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                tenantState.isLoading || oauthState.isInProgress -> {
+                oauthState.isInProgress -> {
                     LoadingScreen()
                 }
 
@@ -170,6 +170,7 @@ class MainActivity : ComponentActivity() {
                         selectedTenantId = tenantState.selectedTenantId,
                         isLoggedIn = oauthState.isLoggedIn,
                         authInFlight = oauthState.isInProgress,
+                        tenantsLoading = tenantState.isLoading,
                         onSelectTenant = ::onSelectTenant,
                         onRefreshTenants = ::onRefreshTenants,
                         onLoginClick = ::startLogin,
