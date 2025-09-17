@@ -38,7 +38,6 @@ android {
         isCoreLibraryDesugaringEnabled = true
     }
     kotlinOptions { jvmTarget = "17" }
-    // Align Kotlin toolchain with Java 17 to avoid mismatch errors
     kotlin { jvmToolchain(17) }
 
     buildFeatures { compose = true }
@@ -66,8 +65,6 @@ dependencies {
     // ── Hilt (KSP)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
-
-    // Prefer maintained compose integration:
     implementation(libs.androidx.hilt.navigation.compose)
     // Hilt + WorkManager
     implementation(libs.androidx.hilt.work)
