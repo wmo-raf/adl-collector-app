@@ -6,6 +6,9 @@ import com.climtech.adlcollector.core.auth.OAuthManager
 import com.climtech.adlcollector.core.auth.TenantLocalStore
 import com.climtech.adlcollector.core.auth.TenantManager
 import com.climtech.adlcollector.core.data.db.AppDatabase
+import com.climtech.adlcollector.core.data.db.ObservationDao
+import com.climtech.adlcollector.core.data.db.StationDao
+import com.climtech.adlcollector.core.data.db.StationDetailDao
 import com.climtech.adlcollector.core.data.network.NetworkModule
 import com.climtech.adlcollector.feature.login.data.TenantRepository
 import com.squareup.moshi.Moshi
@@ -28,21 +31,21 @@ object CoreModule {
 
     @Provides
     @Singleton
-    fun provideAuthManager(@ApplicationContext ctx: Context, local: TenantLocalStore): AuthManager =
-        AuthManager(ctx, local)
+    fun provideAuthManager(
+        @ApplicationContext ctx: Context, local: TenantLocalStore
+    ): AuthManager = AuthManager(ctx, local)
 
     @Provides
     @Singleton
-    fun provideOAuthManager(authManager: AuthManager, localStore: TenantLocalStore): OAuthManager =
-        OAuthManager(authManager, localStore)
+    fun provideOAuthManager(
+        authManager: AuthManager, localStore: TenantLocalStore
+    ): OAuthManager = OAuthManager(authManager, localStore)
 
     @Provides
     @Singleton
     fun provideTenantManager(
-        repository: TenantRepository,
-        localStore: TenantLocalStore
-    ): TenantManager =
-        TenantManager(repository, localStore)
+        repository: TenantRepository, localStore: TenantLocalStore
+    ): TenantManager = TenantManager(repository, localStore)
 
     @Provides
     @Singleton
@@ -51,13 +54,21 @@ object CoreModule {
     @Provides
     @Singleton
     fun provideBaseOkHttpClient(): OkHttpClient =
-        NetworkModule.okHttpClient(
-            authInterceptor = null,
-            enableLogging = true
-        )
+        NetworkModule.okHttpClient(authInterceptor = null, enableLogging = true)
 
     @Provides
     @Singleton
-    fun provideAppDatabase(@ApplicationContext ctx: Context): AppDatabase =
-        AppDatabase.get(ctx)
+    fun provideAppDatabase(@ApplicationContext ctx: Context): AppDatabase = AppDatabase.get(ctx)
+
+    @Provides
+    @Singleton
+    fun provideObservationDao(db: AppDatabase): ObservationDao = db.observationDao()
+
+    @Provides
+    @Singleton
+    fun provideStationDao(db: AppDatabase): StationDao = db.stationDao()
+
+    @Provides
+    @Singleton
+    fun provideStationDetailDao(db: AppDatabase): StationDetailDao = db.stationDetailDao()
 }
