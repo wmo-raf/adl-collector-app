@@ -54,13 +54,17 @@ class StationDetailViewModel @Inject constructor(
         detailStreamJob = viewModelScope.launch {
             repo.stationDetailStream(tenant.id, stationId).collectLatest { cached ->
                 val currentState = _ui.value
-                _ui.value = currentState.copy(
-                    detail = cached ?: currentState.detail,
-                    // Clear loading if we got cached data
-                    loading = if (cached != null) false else currentState.loading,
-                    // Clear error if we have cached data to show
-                    error = if (cached != null) null else currentState.error
-                )
+
+                if (cached != null) {
+                    // We have cached data - show it immediately
+                    _ui.value = currentState.copy(
+                        detail = cached, loading = false, error = null
+                    )
+                } else if (currentState.detail == null && !currentState.loading) {
+                    // No cached data AND we haven't started loading yet - fetch from API
+                    _ui.value = currentState.copy(loading = true, error = null)
+                    reload(showFullLoading = true)
+                }
             }
         }
 
@@ -70,10 +74,6 @@ class StationDetailViewModel @Inject constructor(
             observationDao.streamForStation(tenant.id, stationId).map { list -> list.take(3) }
                 .collectLatest { _recent.value = it }
         }
-
-        // 3) Kick background refresh
-        val hasCache = _ui.value.detail != null
-        reload(showFullLoading = !hasCache)
     }
 
     fun reload(showFullLoading: Boolean = false) {
