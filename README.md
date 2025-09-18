@@ -5,7 +5,7 @@ A mobile data collection app for weather stations and environmental monitoring, 
 
 ---
 
-![Tenant Selector](./screenshots/tenant_select.png)
+![Tenant Selector](./screenshots/adl_collector.png)
 
 ## ✨ Features
 
