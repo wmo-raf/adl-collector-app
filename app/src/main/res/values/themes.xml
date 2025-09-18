@@ -9,4 +9,26 @@
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowNoDisplay">true</item>
     </style>
+
+    <!-- Upload status themes for the enhanced worker -->
+    <style name="UploadStatus">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="UploadStatus.Success" parent="UploadStatus">
+        <item name="android:textColor">@color/status_synced</item>
+    </style>
+
+    <style name="UploadStatus.Pending" parent="UploadStatus">
+        <item name="android:textColor">@color/status_queued</item>
+    </style>
+
+    <style name="UploadStatus.Failed" parent="UploadStatus">
+        <item name="android:textColor">@color/status_failed</item>
+    </style>
+
+    <style name="UploadStatus.Uploading" parent="UploadStatus">
+        <item name="android:textColor">@color/status_uploading</item>
+    </style>
 </resources>

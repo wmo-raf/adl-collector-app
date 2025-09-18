@@ -20,23 +20,29 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -74,8 +80,7 @@ private fun InfoRowStacked(
     valueColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
@@ -116,71 +121,145 @@ fun StationDetailScreen(
     LaunchedEffect(stationId, tenant.id) { vm.start(tenant, stationId) }
     val ui by vm.ui.collectAsState()
     val recent by vm.recent.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(title = { Text(stationName) }, navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                }
-            }, actions = {
-                IconButton(onClick = { vm.reload() }) {
-                    Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
-                }
-            })
-        }) { padding ->
+    // Show snackbar for errors only when no cached data
+    LaunchedEffect(ui.error) {
+        ui.error?.let {
+            snackbarHostState.showSnackbar(it)
+            vm.clearError()
+        }
+    }
+
+    Scaffold(topBar = {
+        TopAppBar(title = { Text(stationName) }, navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            }
+        }, actions = {
+            IconButton(onClick = { vm.reload() }) {
+                Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+            }
+        })
+    }, snackbarHost = { SnackbarHost(snackbarHostState) }) { padding ->
         Box(Modifier.fillMaxSize()) {
-            when {
-                ui.error != null -> ErrorBox(
-                    message = ui.error!!,
-                    onRetry = { vm.reload() },
-                    modifier = Modifier.padding(padding)
-                )
-
-                ui.detail != null -> DetailBody(
-                    detail = ui.detail!!,
-                    padding = padding,
-                    onAddObservation = onAddObservation,
-                    recent = recent,
-                    onOpenObservationRemote = onOpenObservation
-                )
-
-                ui.loading -> {
-                    // Show loading screen when detail is null but still loading
-                    Column(
-                        modifier = Modifier
-                            .padding(padding)
-                            .fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        CircularProgressIndicator()
-                        Spacer(Modifier.height(16.dp))
-                        Text("Loading station details...")
-                    }
+            Column {
+                // Show offline indicator when using cached data
+                if (ui.isOffline && ui.detail != null) {
+                    OfflineIndicatorCard(
+                        onRetry = { vm.retryRefresh() },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
                 }
 
-                else -> {
-                    // This should rarely happen - no detail, no loading, no error
-                    Box(
-                        Modifier
-                            .padding(padding)
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("No detail to show.")
+                // Show background refresh indicator
+                if (ui.refreshing && ui.detail != null) {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                // Main content
+                Box(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    when {
+                        // Show error only when no cached detail available
+                        ui.error != null && ui.detail == null -> {
+                            ErrorBox(
+                                message = ui.error!!,
+                                onRetry = { vm.reload() },
+                                modifier = Modifier.padding(padding)
+                            )
+                        }
+
+                        // Show cached or fresh detail
+                        ui.detail != null -> {
+                            DetailBody(
+                                detail = ui.detail!!,
+                                padding = padding,
+                                onAddObservation = onAddObservation,
+                                recent = recent,
+                                onOpenObservationRemote = onOpenObservation
+                            )
+                        }
+
+                        // Show loading only when no cached data
+                        ui.loading -> {
+                            Column(
+                                modifier = Modifier
+                                    .padding(padding)
+                                    .fillMaxSize(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                CircularProgressIndicator()
+                                Spacer(Modifier.height(16.dp))
+                                Text("Loading station details...")
+                            }
+                        }
+
+                        // Fallback state
+                        else -> {
+                            Box(
+                                Modifier
+                                    .padding(padding)
+                                    .fillMaxSize()
+                                    .padding(24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("No detail to show.")
+                            }
+                        }
                     }
                 }
             }
 
-            // Overlay a translucent loading panel while reloading (content stays visible)
-            if (ui.loading && ui.detail != null) {
+            // Overlay a translucent loading panel while background refreshing (content stays visible)
+            if (ui.refreshing && ui.detail != null) {
                 LoadingBox(
                     Modifier
                         .matchParentSize()
                         .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OfflineIndicatorCard(
+    onRetry: () -> Unit, modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(), colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Filled.CloudOff,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp)
+            )
+
+            Spacer(Modifier.width(8.dp))
+
+            Text(
+                text = "Station details may be outdated. Connect to refresh.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+
+            TextButton(onClick = onRetry) {
+                Text("Retry")
             }
         }
     }
@@ -220,9 +299,7 @@ private fun DetailBody(
     onOpenObservationRemote: (Long) -> Unit
 ) {
     val windowStatus = getWindowStatus(
-        detail.timezone,
-        detail.schedule.config,
-        detail.schedule.mode == "fixed_local"
+        detail.timezone, detail.schedule.config, detail.schedule.mode == "fixed_local"
     )
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -255,8 +332,7 @@ private fun DetailBody(
             item {
                 ElevatedCard(Modifier.fillMaxWidth()) {
                     Column(
-                        Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         ScheduleCardHeader()
 
@@ -269,13 +345,11 @@ private fun DetailBody(
 
                         when (detail.schedule.mode) {
                             "fixed_local" -> FixedScheduleCompact(
-                                detail.schedule.config,
-                                detail.timezone
+                                detail.schedule.config, detail.timezone
                             )
 
                             "windowed_only" -> WindowedScheduleCompact(
-                                detail.schedule.config,
-                                detail.timezone
+                                detail.schedule.config, detail.timezone
                             )
 
                             else -> {
@@ -399,8 +473,7 @@ private fun ScheduleCardHeader() {
             onClick = {
                 // TODO: Show help dialog or navigate to help screen
                 // For now, just the icon serves as visual indicator
-            },
-            modifier = Modifier.size(24.dp)
+            }, modifier = Modifier.size(24.dp)
         ) {
             Icon(
                 Icons.Filled.Help,
@@ -414,15 +487,11 @@ private fun ScheduleCardHeader() {
 
 @Composable
 private fun ScheduleStatusIndicator(
-    stationTimezone: String,
-    scheduleConfig: Map<String, Any?>,
-    isFixedSlot: Boolean
+    stationTimezone: String, scheduleConfig: Map<String, Any?>, isFixedSlot: Boolean
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val (statusText, statusColor, statusIcon) = remember(
-        stationTimezone,
-        scheduleConfig,
-        colorScheme
+        stationTimezone, scheduleConfig, colorScheme
     ) {
         val now = run {
             val instant = Instant.now()
@@ -468,9 +537,7 @@ private fun ScheduleStatusIndicator(
 
                 when {
                     openWindow != null -> Triple(
-                        "Observation window open now",
-                        colorScheme.primary,
-                        Icons.Filled.AccessTime
+                        "Observation window open now", colorScheme.primary, Icons.Filled.AccessTime
                     )
 
                     nextWindow != null -> {
@@ -489,9 +556,7 @@ private fun ScheduleStatusIndicator(
                     }
 
                     else -> Triple(
-                        "All windows closed for today",
-                        colorScheme.outline,
-                        Icons.Filled.Schedule
+                        "All windows closed for today", colorScheme.outline, Icons.Filled.Schedule
                     )
                 }
             }
@@ -516,34 +581,25 @@ private fun ScheduleStatusIndicator(
                             startTime.format(DateTimeFormatter.ofPattern("HH:mm"))
                         }"
                         Triple(
-                            "Window opens $timeText",
-                            colorScheme.tertiary,
-                            Icons.Filled.Schedule
+                            "Window opens $timeText", colorScheme.tertiary, Icons.Filled.Schedule
                         )
                     }
 
-                    currentTime.isAfter(startTime) && currentTime.isBefore(endTime) ->
-                        Triple(
-                            "Observation window open",
-                            colorScheme.primary,
-                            Icons.Filled.AccessTime
-                        )
+                    currentTime.isAfter(startTime) && currentTime.isBefore(endTime) -> Triple(
+                        "Observation window open", colorScheme.primary, Icons.Filled.AccessTime
+                    )
 
                     graceMins > 0 && currentTime.isAfter(endTime) && currentTime.isBefore(
                         graceEndTime
-                    ) ->
-                        Triple(
-                            "Grace period (late submissions)",
-                            colorScheme.secondary,
-                            Icons.Filled.Warning
-                        )
+                    ) -> Triple(
+                        "Grace period (late submissions)",
+                        colorScheme.secondary,
+                        Icons.Filled.Warning
+                    )
 
-                    else ->
-                        Triple(
-                            "Observation window closed",
-                            colorScheme.outline,
-                            Icons.Filled.Schedule
-                        )
+                    else -> Triple(
+                        "Observation window closed", colorScheme.outline, Icons.Filled.Schedule
+                    )
                 }
             } else {
                 Triple("Window times not configured", colorScheme.error, Icons.Filled.Warning)
@@ -558,13 +614,10 @@ private fun ScheduleStatusIndicator(
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                statusIcon,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp)
+                statusIcon, contentDescription = null, modifier = Modifier.size(16.dp)
             )
             Spacer(Modifier.width(8.dp))
             Text(
@@ -599,8 +652,7 @@ private fun FixedScheduleCompact(cfg: Map<String, Any?>, timezone: String) {
             InfoRowStacked(
                 icon = Icons.Filled.Schedule,
                 label = "Observation times:",
-                value = slots.joinToString(" • ") { it.format(formatter) }
-            )
+                value = slots.joinToString(" • ") { it.format(formatter) })
         }
     }
 }
@@ -658,8 +710,7 @@ private fun InfoRowWithIcon(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f)
+            verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)
         ) {
             Icon(
                 icon,
@@ -689,18 +740,16 @@ private fun InfoRowWithIcon(
 
 @Composable
 private fun ObservationsRow(
-    obs: ObservationEntity,
-    onClick: (() -> Unit)?
+    obs: ObservationEntity, onClick: (() -> Unit)?
 ) {
     val enabled = onClick != null
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .alpha(if (enabled) 1f else 0.75f)
-            .let { base ->
-                if (enabled) base.clickable(onClick = onClick!!) else base
-            }
-            .padding(vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+    Row(modifier = Modifier
+        .fillMaxWidth()
+        .alpha(if (enabled) 1f else 0.75f)
+        .let { base ->
+            if (enabled) base.clickable(onClick = onClick!!) else base
+        }
+        .padding(vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
         // Observation time (station timezone)
         Text(
             text = formatObsTime(obs.obsTimeUtcMs, obs.timezone),
@@ -757,8 +806,7 @@ private fun StatusPill(status: ObservationEntity.SyncStatus) {
 
 @Composable
 private fun EmptyState(
-    icon: @Composable () -> Unit,
-    text: String
+    icon: @Composable () -> Unit, text: String
 ) {
     Column(
         Modifier
@@ -768,14 +816,12 @@ private fun EmptyState(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Box(
-            modifier = Modifier.height(64.dp),
-            contentAlignment = Alignment.Center
+            modifier = Modifier.height(64.dp), contentAlignment = Alignment.Center
         ) {
             icon()
         }
         Text(
-            text,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            text, color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -792,14 +838,11 @@ private fun formatObsTime(utcMs: Long, tz: String): String {
 }
 
 data class WindowStatus(
-    val canSubmit: Boolean,
-    val reasonClosed: String? = null
+    val canSubmit: Boolean, val reasonClosed: String? = null
 )
 
 fun getWindowStatus(
-    stationTimezone: String,
-    scheduleConfig: Map<String, Any?>,
-    isFixedSlot: Boolean
+    stationTimezone: String, scheduleConfig: Map<String, Any?>, isFixedSlot: Boolean
 ): WindowStatus {
     val now = run {
         val instant = Instant.now()
@@ -865,8 +908,7 @@ fun getWindowStatus(
                 WindowStatus(true)
             } else if (currentTime.isBefore(startTime)) {
                 WindowStatus(
-                    false,
-                    "Opens at ${startTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"
+                    false, "Opens at ${startTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"
                 )
             } else {
                 WindowStatus(false, "Window closed")
@@ -892,8 +934,7 @@ private fun createSampleFixedStationDetail(): StationDetail {
                 adl_parameter_name = "Temperature",
                 obs_parameter_unit = "°C",
                 is_rainfall = false
-            ),
-            StationDetail.VariableMapping(
+            ), StationDetail.VariableMapping(
                 id = 2,
                 adl_parameter_name = "Rainfall",
                 obs_parameter_unit = "mm",
@@ -901,8 +942,7 @@ private fun createSampleFixedStationDetail(): StationDetail {
             )
         ),
         schedule = StationDetail.Schedule(
-            mode = "fixed_local",
-            config = mapOf(
+            mode = "fixed_local", config = mapOf(
                 "slots" to listOf("06:00", "12:00", "18:00"),
                 "window_before_mins" to 15,
                 "window_after_mins" to 45,
@@ -930,8 +970,7 @@ private fun createSampleWindowedStationDetail(): StationDetail {
             )
         ),
         schedule = StationDetail.Schedule(
-            mode = "windowed_only",
-            config = mapOf(
+            mode = "windowed_only", config = mapOf(
                 "window_start" to "08:00",
                 "window_end" to "17:00",
                 "grace_late_mins" to 60,
@@ -962,8 +1001,7 @@ private fun createSampleObservations(): List<ObservationEntity> {
             payloadJson = """{"records":[{"variable_mapping_id":1,"value":23.5}]}""",
             status = ObservationEntity.SyncStatus.SYNCED,
             remoteId = 12345
-        ),
-        ObservationEntity(
+        ), ObservationEntity(
             obsKey = "tenant:101:${now - 7200000}",
             tenantId = "sample",
             stationId = 101,
@@ -978,8 +1016,7 @@ private fun createSampleObservations(): List<ObservationEntity> {
             payloadJson = """{"records":[{"variable_mapping_id":1,"value":24.1}]}""",
             status = ObservationEntity.SyncStatus.QUEUED,
             remoteId = null
-        ),
-        ObservationEntity(
+        ), ObservationEntity(
             obsKey = "tenant:101:${now - 10800000}",
             tenantId = "sample",
             stationId = 101,
@@ -1012,8 +1049,7 @@ private fun PreviewFixedScheduleDetail() {
             padding = PaddingValues(0.dp),
             onAddObservation = {},
             recent = createSampleObservations(),
-            onOpenObservationRemote = {}
-        )
+            onOpenObservationRemote = {})
     }
 }
 
@@ -1030,183 +1066,6 @@ private fun PreviewWindowedScheduleDetail() {
             padding = PaddingValues(0.dp),
             onAddObservation = {},
             recent = emptyList(),
-            onOpenObservationRemote = {}
-        )
-    }
-}
-
-@Preview(name = "Schedule Status • Open Window", showBackground = true)
-@Composable
-private fun PreviewScheduleStatusOpen() {
-    ADLCollectorTheme {
-        Column(Modifier.padding(16.dp)) {
-            ScheduleStatusIndicator(
-                stationTimezone = "Africa/Nairobi",
-                scheduleConfig = mapOf(
-                    "slots" to listOf("06:00", "12:00", "18:00"),
-                    "window_before_mins" to 15,
-                    "window_after_mins" to 45
-                ),
-                isFixedSlot = true
-            )
-        }
-    }
-}
-
-@Preview(name = "Schedule Card Header", showBackground = true)
-@Composable
-private fun PreviewScheduleCardHeader() {
-    ADLCollectorTheme {
-        Column(Modifier.padding(16.dp)) {
-            ScheduleCardHeader()
-        }
-    }
-}
-
-@Preview(name = "Info Rows Stacked", showBackground = true)
-@Composable
-private fun PreviewInfoRowsStacked() {
-    ADLCollectorTheme {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            InfoRowStacked(
-                icon = Icons.Filled.Schedule,
-                label = "Observation times:",
-                value = "06:00 • 12:00 • 18:00 • 22:30"
-            )
-            InfoRowStacked(
-                icon = Icons.Filled.AccessTime,
-                label = "Daily window:",
-                value = "08:00 - 17:00"
-            )
-        }
-    }
-}
-
-@Preview(name = "Info Rows with Icons", showBackground = true)
-@Composable
-private fun PreviewInfoRowsWithIcons() {
-    ADLCollectorTheme {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            InfoRowWithIcon(
-                icon = Icons.Filled.Schedule,
-                label = "Observation times:",
-                value = "06:00 • 12:00 • 18:00"
-            )
-            InfoRowWithIcon(
-                icon = Icons.Filled.AccessTime,
-                label = "Submission window:",
-                value = "60 minutes around each time"
-            )
-            InfoRowWithIcon(
-                icon = Icons.Filled.Warning,
-                label = "Late submissions:",
-                value = "Accepted up to 30 min late",
-                valueColor = MaterialTheme.colorScheme.secondary
-            )
-        }
-    }
-}
-
-@Preview(name = "Status Pills", showBackground = true)
-@Composable
-private fun PreviewStatusPills() {
-    ADLCollectorTheme {
-        Column(
-            Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            StatusPill(ObservationEntity.SyncStatus.SYNCED)
-            StatusPill(ObservationEntity.SyncStatus.QUEUED)
-            StatusPill(ObservationEntity.SyncStatus.UPLOADING)
-            StatusPill(ObservationEntity.SyncStatus.FAILED)
-        }
-    }
-}
-
-@Preview(name = "Button States", showBackground = true)
-@Composable
-private fun PreviewAddObservationButton() {
-    ADLCollectorTheme {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Window open
-            Button(
-                onClick = {},
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                enabled = true,
-                elevation = androidx.compose.material3.ButtonDefaults.elevatedButtonElevation(
-                    defaultElevation = 8.dp
-                )
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(Icons.Filled.AccessTime, contentDescription = null)
-                    Text("Add Observation")
-                }
-            }
-
-            // Window closed - next time
-            Button(
-                onClick = {},
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                enabled = false,
-                elevation = androidx.compose.material3.ButtonDefaults.elevatedButtonElevation(
-                    defaultElevation = 8.dp
-                )
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(Icons.Filled.Schedule, contentDescription = null)
-                    Text("Next at 14:00")
-                }
-            }
-
-            // Window closed - general
-            Button(
-                onClick = {},
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                enabled = false,
-                elevation = androidx.compose.material3.ButtonDefaults.elevatedButtonElevation(
-                    defaultElevation = 8.dp
-                )
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(Icons.Filled.Schedule, contentDescription = null)
-                    Text("Window Closed")
-                }
-            }
-        }
-    }
-}
-
-@Preview(name = "Empty State", showBackground = true)
-@Composable
-private fun PreviewEmptyState() {
-    ADLCollectorTheme {
-        EmptyState(
-            icon = { Icon(Icons.Filled.Inbox, contentDescription = null) },
-            text = "No recent observations"
-        )
+            onOpenObservationRemote = {})
     }
 }

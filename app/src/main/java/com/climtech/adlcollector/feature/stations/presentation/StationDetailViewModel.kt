@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.climtech.adlcollector.core.data.db.ObservationDao
 import com.climtech.adlcollector.core.data.db.ObservationEntity
 import com.climtech.adlcollector.core.model.TenantConfig
+import com.climtech.adlcollector.core.net.NetworkException
 import com.climtech.adlcollector.core.util.Result
 import com.climtech.adlcollector.feature.stations.data.StationsRepository
 import com.climtech.adlcollector.feature.stations.data.net.StationDetail
@@ -19,9 +20,12 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class StationDetailUi(
-    val loading: Boolean = true,       // true until first cache OR network result
-    val detail: StationDetail? = null, // null until cache/network returns
-    val error: String? = null          // last refresh error (cache still shown)
+    val loading: Boolean = false,       // only true on first load when no cache
+    val detail: StationDetail? = null, // cached or fresh data
+    val error: String? = null,          // only shown when no cached data
+    val isOffline: Boolean = false,     // indicates using cached/stale data
+    val lastRefreshFailed: Boolean = false, // background refresh failed
+    val refreshing: Boolean = false     // background refresh in progress
 )
 
 @HiltViewModel
@@ -45,54 +49,124 @@ class StationDetailViewModel @Inject constructor(
         this.tenant = tenant
         this.stationId = stationId
 
-        // 1) Observe cached station detail
+        // 1) Start streaming cached station detail immediately
         detailStreamJob?.cancel()
         detailStreamJob = viewModelScope.launch {
             repo.stationDetailStream(tenant.id, stationId).collectLatest { cached ->
-                val existing = _ui.value
-                _ui.value = existing.copy(
-                    // keep showing loading=true only until we have *any* cache
-                    loading = existing.loading && cached == null, detail = cached ?: existing.detail
-                    // keep previous error until next refresh result
+                val currentState = _ui.value
+                _ui.value = currentState.copy(
+                    detail = cached ?: currentState.detail,
+                    // Clear loading if we got cached data
+                    loading = if (cached != null) false else currentState.loading,
+                    // Clear error if we have cached data to show
+                    error = if (cached != null) null else currentState.error
                 )
             }
         }
 
-        // 2) Stream most recent observations for this station (top 3)
+        // 2) Stream recent observations for this station (top 3)
         recentStreamJob?.cancel()
         recentStreamJob = viewModelScope.launch {
-            observationDao.streamForStation(
-                    tenant.id,
-                    stationId
-                ) // already ORDER BY obsTimeUtcMs DESC
-                .map { list -> list.take(3) }.collectLatest { _recent.value = it }
+            observationDao.streamForStation(tenant.id, stationId).map { list -> list.take(3) }
+                .collectLatest { _recent.value = it }
         }
 
-        // 3) Kick a refresh in parallel (network)
-        reload()
+        // 3) Kick background refresh
+        val hasCache = _ui.value.detail != null
+        reload(showFullLoading = !hasCache)
     }
 
-    fun reload() {
+    fun reload(showFullLoading: Boolean = false) {
         if (!::tenant.isInitialized || stationId <= 0) return
 
-        // Show full-screen spinner only if there is no cached detail yet
-        _ui.value = _ui.value.copy(loading = _ui.value.detail == null)
-
         viewModelScope.launch {
-            when (val res = repo.refreshStationDetail(tenant, stationId)) {
+            val currentState = _ui.value
+
+            // Show appropriate loading state
+            if (showFullLoading && currentState.detail == null) {
+                // First load with no cache - show full loading
+                _ui.value = currentState.copy(loading = true, error = null)
+            } else if (currentState.detail != null) {
+                // Background refresh with cached data - show refresh indicator
+                _ui.value = currentState.copy(refreshing = true, error = null)
+            }
+
+            when (val result = repo.refreshStationDetail(tenant, stationId)) {
                 is Result.Ok -> {
-                    _ui.value = _ui.value.copy(loading = false, error = null)
+                    _ui.value = _ui.value.copy(
+                        loading = false,
+                        refreshing = false,
+                        error = null,
+                        isOffline = false,
+                        lastRefreshFailed = false
+                    )
                 }
 
                 is Result.Err -> {
-                    _ui.value = _ui.value.copy(
-                        loading = false,
-                        // If we have cache, keep showing it and surface the error softly.
-                        error = res.error.message ?: "Failed to refresh station detail"
-                    )
+                    val hasDetailToShow = _ui.value.detail != null
+
+                    if (hasDetailToShow) {
+                        // We have cached data - show it with offline indicator
+                        _ui.value = _ui.value.copy(
+                            loading = false,
+                            refreshing = false,
+                            error = null, // Don't show error since we have data
+                            isOffline = isOfflineError(result.error),
+                            lastRefreshFailed = true
+                        )
+                    } else {
+                        // No cached data - show error
+                        _ui.value = _ui.value.copy(
+                            loading = false,
+                            refreshing = false,
+                            error = result.error.toUserMessage(),
+                            isOffline = isOfflineError(result.error),
+                            lastRefreshFailed = true
+                        )
+                    }
                 }
             }
         }
+    }
+
+    fun retryRefresh() {
+        reload(showFullLoading = false)
+    }
+
+    fun clearError() {
+        _ui.value = _ui.value.copy(error = null)
+    }
+
+    private fun isOfflineError(error: Throwable): Boolean {
+        return when (error) {
+            is NetworkException.Offline -> true
+            is NetworkException.Timeout -> true
+            else -> false
+        }
+    }
+
+    private fun Throwable.toUserMessage(): String = when (this) {
+        is NetworkException.Offline -> "You're offline. Station details may be outdated."
+
+        is NetworkException.Timeout -> "Request timed out. Please try again."
+
+        is NetworkException.Unauthorized -> "Session expired. Please log in again."
+
+        is NetworkException.Forbidden -> "You don't have permission to access this station."
+
+        is NetworkException.NotFound -> "Station not found."
+
+        is NetworkException.Server -> "Server error (${this.code}). Please try again later."
+
+        is NetworkException.Client -> this.body ?: "Request error (${this.code})."
+
+        is NetworkException.EmptyBody -> "Server returned no data."
+
+        is NetworkException.Serialization -> "We couldn't read the server response."
+
+        is NetworkException.UnexpectedBody -> "The server returned an unexpected response."
+
+        else -> message ?: "Failed to load station details."
     }
 
     override fun onCleared() {

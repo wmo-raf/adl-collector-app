@@ -18,7 +18,6 @@ import com.climtech.adlcollector.feature.observations.ui.ObservationFormScreen
 import com.climtech.adlcollector.feature.stations.presentation.StationsViewModel
 import com.climtech.adlcollector.feature.stations.ui.StationDetailScreen
 
-
 @Composable
 fun AppNavGraph(
     nav: androidx.navigation.NavHostController,
@@ -34,6 +33,9 @@ fun AppNavGraph(
     onLogout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val workManager = WorkManager.getInstance(context)
+
     NavHost(navController = nav, startDestination = startDestination, modifier = modifier) {
 
         composable(Route.Splash.route) {
@@ -85,23 +87,18 @@ fun AppNavGraph(
             } else {
                 val vm: StationsViewModel = hiltViewModel(key = "stations-$tenantId")
                 MainScreen(
-                    outerNav = nav,
-                    tenant = tenant,
-                    stationsVm = vm,
-                    onLogout = onLogout
+                    outerNav = nav, tenant = tenant, stationsVm = vm, onLogout = onLogout
                 )
             }
         }
 
-        // NEW: Station Detail - Outside the bottom bar navigation
+        // Station Detail - Outside the bottom bar navigation
         composable(
             route = Route.StationDetail.route,
             arguments = listOf(
                 navArgument("tenantId") { type = NavType.StringType },
                 navArgument("stationId") { type = NavType.LongType },
-                navArgument("stationName") { type = NavType.StringType }
-            )
-        ) { backStackEntry ->
+                navArgument("stationName") { type = NavType.StringType })) { backStackEntry ->
             val tenantId = backStackEntry.arguments!!.getString("tenantId")!!
             val stationId = backStackEntry.arguments!!.getLong("stationId")
             val stationName = backStackEntry.arguments!!.getString("stationName")!!
@@ -121,21 +118,17 @@ fun AppNavGraph(
                     onOpenObservation = { obsId ->
                         // TODO: Navigate to observation detail when available
                     },
-                    onRefresh = { /* TODO: trigger refresh if you add caching */ }
-                )
+                    onRefresh = { /* TODO: trigger refresh if you add caching */ })
             }
         }
 
-        // NEW: Observation Form - Also outside bottom bar
+        // Observation Form - Also outside bottom bar
         composable(
             route = Route.ObservationForm.route,
             arguments = listOf(
                 navArgument("tenantId") { type = NavType.StringType },
                 navArgument("stationId") { type = NavType.LongType },
-                navArgument("stationName") { type = NavType.StringType }
-            )
-        ) { backStackEntry ->
-            val context = LocalContext.current
+                navArgument("stationName") { type = NavType.StringType })) { backStackEntry ->
             val tenantId = backStackEntry.arguments!!.getString("tenantId")!!
             val stationId = backStackEntry.arguments!!.getLong("stationId")
             val stationName = backStackEntry.arguments!!.getString("stationName")!!
@@ -154,12 +147,15 @@ fun AppNavGraph(
                     submitEndpointUrl = submitUrl,
                     onCancel = { nav.popBackStack() },
                     onSubmitted = {
-                        // enqueue upload and go back to station detail
-                        val req = UploadObservationsWorker.oneShot(tenantId, submitUrl)
-                        WorkManager.getInstance(context).enqueue(req)
+                        val workRequest = UploadObservationsWorker.createWorkRequest(
+                            tenantId = tenantId,
+                            endpointUrl = submitUrl,
+                            isUrgent = true, // Immediate upload after submission
+                            allowMetered = false // Respect user's data preferences
+                        )
+                        workManager.enqueue(workRequest)
                         nav.popBackStack()
-                    }
-                )
+                    })
             }
         }
     }

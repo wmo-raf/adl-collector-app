@@ -72,7 +72,6 @@ fun MainScreen(
                 StationsScreen(
                     tenant = tenant,
                     viewModel = stationsVm,
-                    onLogout = onLogout,
                     onOpenStation = { stationId, stationName ->
                         // Navigate to top-level station detail (outside bottom bar)
                         outerNav.navigate(

@@ -1,3 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- App Name -->
     <string name="app_name">ADL</string>
+
+    <!-- Upload Notifications -->
+    <string name="notification_upload_progress_title">Uploading Observations</string>
+    <string name="notification_upload_progress_text">%1$d of %2$d observations</string>
+    <string name="notification_upload_success_title">Upload Complete</string>
+    <string name="notification_upload_success_text">Successfully uploaded %1$d observations</string>
+    <string name="notification_upload_failure_title">Upload Failed</string>
+    <string name="notification_upload_failure_text">Unable to sync observations for %1$s</string>
+
+    <!-- Upload Status -->
+    <string name="upload_status_active">Uploading observations…</string>
+    <string name="upload_status_idle">All observations synced</string>
+    <string name="upload_status_failed">Upload failed</string>
+    <string name="upload_status_pending">%1$d observations pending</string>
+
+    <!-- Error Messages -->
+    <string name="error_network_unavailable">No network connection available</string>
+    <string name="error_metered_connection">Upload paused on metered connection</string>
+    <string name="error_battery_optimized">Background uploads restricted by battery optimization</string>
+    <string name="error_auth_expired">Authentication expired. Please log in again.</string>
+    <string name="error_server_unavailable">Server temporarily unavailable</string>
+    <string name="error_invalid_data">Invalid observation data</string>
+
+    <!-- Actions -->
+    <string name="action_retry">Retry</string>
+    <string name="action_sync_now">Sync Now</string>
+    <string name="action_sync_all">Sync All</string>
+    <string name="action_allow_metered">Allow Metered</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_settings">Settings</string>
+
+    <!-- Content Descriptions -->
+    <string name="cd_upload_status_icon">Upload status indicator</string>
+    <string name="cd_sync_button">Sync observations</string>
+    <string name="cd_retry_button">Retry failed uploads</string>
+    <string name="cd_upload_progress">Upload progress indicator</string>
+
+    <!-- Dialogs -->
+    <string name="dialog_metered_upload_title">Use Mobile Data?</string>
+    <string name="dialog_metered_upload_message">You\'re on a metered connection. Upload observations anyway?</string>
+    <string name="dialog_battery_optimization_title">Battery Optimization</string>
+    <string name="dialog_battery_optimization_message">For reliable background uploads, disable battery optimization for this app in Settings.</string>
+
+    <!-- Status Labels -->
+    <string name="status_synced">Synced</string>
+    <string name="status_synced_late">Synced (Late)</string>
+    <string name="status_queued">Queued</string>
+    <string name="status_uploading">Uploading</string>
+    <string name="status_failed">Failed</string>
+
+    <!-- Summary -->
+    <string name="summary_observations_today">Today\'s Observations</string>
+    <string name="summary_synced_count">%1$d synced</string>
+    <string name="summary_pending_count">%1$d pending</string>
+    <string name="summary_failed_count">%1$d failed</string>
+    <string name="summary_oldest_pending">Oldest pending: %1$d hours ago</string>
 </resources>
