@@ -34,10 +34,10 @@ fun EmptyStationsState(onRefresh: (() -> Unit)?) {
                 }
             }
             Spacer(Modifier.height(12.dp))
-            Text("No stations available", style = MaterialTheme.typography.titleMedium)
+            Text("No stations assigned", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(4.dp))
             Text(
-                "Pull to refresh or check your assignment.",
+                "Refresh or check your assignment on ADL.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
