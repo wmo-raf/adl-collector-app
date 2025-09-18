@@ -86,7 +86,17 @@ fun MainScreen(
 
             // TAB: Observations
             composable(BottomDest.Observations.route) {
-                ObservationsScreen(tenantId = tenant.id)
+                ObservationsScreen(
+                    tenantId = tenant.id,
+                    onObservationClick = { observation ->
+                        // Navigate to detail using obsKey instead of remoteId
+                        outerNav.navigate(
+                            Route.ObservationDetail.build(
+                                tenant.id,
+                                observation.obsKey
+                            )
+                        )
+                    })
             }
 
             // TAB: Account

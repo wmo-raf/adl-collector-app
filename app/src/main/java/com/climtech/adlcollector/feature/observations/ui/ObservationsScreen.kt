@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Error
@@ -50,6 +51,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -66,7 +68,8 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun ObservationsScreen(
     tenantId: String,
-    vm: ObservationsViewModel = hiltViewModel()
+    vm: ObservationsViewModel = hiltViewModel(),
+    onObservationClick: (ObservationEntity) -> Unit
 ) {
     LaunchedEffect(tenantId) {
         vm.start(tenantId)
@@ -76,18 +79,13 @@ fun ObservationsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Observations") },
-                actions = {
-                    SyncButton(
-                        isSyncing = uiState.isSyncing,
-                        hasPendingObservations = uiState.hasPendingObservations,
-                        onSyncClick = { vm.syncNow() }
-                    )
-                }
-            )
-        }
-    ) { padding ->
+            TopAppBar(title = { Text("Observations") }, actions = {
+                SyncButton(
+                    isSyncing = uiState.isSyncing,
+                    hasPendingObservations = uiState.hasPendingObservations,
+                    onSyncClick = { vm.syncNow() })
+            })
+        }) { padding ->
         when {
             uiState.error != null -> {
                 ErrorContent(
@@ -103,8 +101,9 @@ fun ObservationsScreen(
                     summary = uiState.summary,
                     observations = uiState.observations,
                     isLoading = uiState.isLoading,
-                    onObservationClick = { /* TODO: Navigate to observation detail */ }
-                )
+                    onObservationClick = {
+                        onObservationClick(it)
+                    })
             }
         }
     }
@@ -112,34 +111,25 @@ fun ObservationsScreen(
 
 @Composable
 private fun SyncButton(
-    isSyncing: Boolean,
-    hasPendingObservations: Boolean,
-    onSyncClick: () -> Unit
+    isSyncing: Boolean, hasPendingObservations: Boolean, onSyncClick: () -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "sync_rotation")
 
     val rotationAngle by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation"
+        initialValue = 0f, targetValue = 360f, animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing), repeatMode = RepeatMode.Restart
+        ), label = "rotation"
     )
 
     IconButton(
-        onClick = onSyncClick,
-        enabled = hasPendingObservations && !isSyncing
+        onClick = onSyncClick, enabled = hasPendingObservations && !isSyncing
     ) {
         Icon(
-            Icons.Filled.CloudSync,
-            contentDescription = when {
+            Icons.Filled.CloudSync, contentDescription = when {
                 isSyncing -> "Syncing observations..."
                 hasPendingObservations -> "Sync pending observations"
                 else -> "No observations to sync"
-            },
-            modifier = if (isSyncing) {
+            }, modifier = if (isSyncing) {
                 Modifier.rotate(rotationAngle)
             } else {
                 Modifier
@@ -205,9 +195,7 @@ private fun ObservationsContent(
             // Observations list
             items(observations) { observation ->
                 ObservationRow(
-                    observation = observation,
-                    onClick = { onObservationClick(observation) }
-                )
+                    observation = observation, onClick = { onObservationClick(observation) })
                 HorizontalDivider()
             }
         }
@@ -220,8 +208,7 @@ private fun TodaySummaryCard(summary: ObservationSummary) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
                 "Today's Summary",
@@ -230,8 +217,7 @@ private fun TodaySummaryCard(summary: ObservationSummary) {
             )
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 SummaryItem(
                     icon = Icons.Filled.CheckCircle,
@@ -263,11 +249,7 @@ private fun TodaySummaryCard(summary: ObservationSummary) {
 
 @Composable
 private fun SummaryItem(
-    icon: ImageVector,
-    count: Int,
-    label: String,
-    color: Color,
-    modifier: Modifier = Modifier
+    icon: ImageVector, count: Int, label: String, color: Color, modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier,
@@ -282,9 +264,7 @@ private fun SummaryItem(
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp)
+                    imageVector = icon, contentDescription = null, modifier = Modifier.size(24.dp)
                 )
             }
         }
@@ -310,36 +290,39 @@ private fun ObservationsTableHeader() {
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             "Station & Time",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(0.6f)
         )
         Text(
             "Status",
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(0.25f),
+            textAlign = TextAlign.Center
         )
+        // Empty space for chevron column
+        Spacer(modifier = Modifier.weight(0.15f))
     }
     HorizontalDivider()
 }
 
+
 @Composable
 private fun ObservationRow(
-    observation: ObservationEntity,
-    onClick: () -> Unit
+    observation: ObservationEntity, onClick: () -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 12.dp),
+    Row(modifier = Modifier
+        .fillMaxWidth()
+        .clickable { onClick() }
+        .padding(vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+        verticalAlignment = Alignment.CenterVertically) {
         Column(
             modifier = Modifier.weight(1f)
         ) {
@@ -358,16 +341,26 @@ private fun ObservationRow(
         Spacer(Modifier.width(8.dp))
 
         StatusPill(
-            status = observation.status,
-            isLate = observation.late
+            status = observation.status, isLate = observation.late
         )
+
+        // Chevron
+        Box(
+            modifier = Modifier.weight(0.15f), contentAlignment = Alignment.CenterEnd
+        ) {
+            Icon(
+                imageVector = Icons.Filled.ChevronRight,
+                contentDescription = "View details",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.size(20.dp)
+            )
+        }
     }
 }
 
 @Composable
 private fun StatusPill(
-    status: ObservationEntity.SyncStatus,
-    isLate: Boolean = false
+    status: ObservationEntity.SyncStatus, isLate: Boolean = false
 ) {
     val (colorInfo, icon) = when (status) {
         ObservationEntity.SyncStatus.SYNCED -> {
@@ -398,9 +391,7 @@ private fun StatusPill(
 
     val (backgroundColor, textColor, label) = colorInfo
     Surface(
-        shape = MaterialTheme.shapes.small,
-        color = backgroundColor,
-        contentColor = textColor
+        shape = MaterialTheme.shapes.small, color = backgroundColor, contentColor = textColor
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -408,9 +399,7 @@ private fun StatusPill(
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(12.dp)
+                imageVector = icon, contentDescription = null, modifier = Modifier.size(12.dp)
             )
             Text(
                 text = label,
@@ -461,9 +450,7 @@ private fun EmptyObservationsState() {
 
 @Composable
 private fun ErrorContent(
-    error: String,
-    onRetry: () -> Unit,
-    modifier: Modifier = Modifier
+    error: String, onRetry: () -> Unit, modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier
@@ -504,20 +491,17 @@ private fun ErrorContent(
 private fun calculateSummary(observations: List<ObservationEntity>): ObservationSummary {
     val today = LocalDate.now()
     val todayObservations = observations.filter { obs ->
-        val obsDate = Instant.ofEpochMilli(obs.obsTimeUtcMs)
-            .atZone(ZoneId.systemDefault())
-            .toLocalDate()
+        val obsDate =
+            Instant.ofEpochMilli(obs.obsTimeUtcMs).atZone(ZoneId.systemDefault()).toLocalDate()
         obsDate == today
     }
 
     return ObservationSummary(
         syncedToday = todayObservations.count { it.status == ObservationEntity.SyncStatus.SYNCED },
         pendingToday = todayObservations.count {
-            it.status == ObservationEntity.SyncStatus.QUEUED ||
-                    it.status == ObservationEntity.SyncStatus.UPLOADING
+            it.status == ObservationEntity.SyncStatus.QUEUED || it.status == ObservationEntity.SyncStatus.UPLOADING
         },
-        failedToday = todayObservations.count { it.status == ObservationEntity.SyncStatus.FAILED }
-    )
+        failedToday = todayObservations.count { it.status == ObservationEntity.SyncStatus.FAILED })
 }
 
 private fun formatObservationTime(utcMs: Long, timezone: String): String {
@@ -549,8 +533,7 @@ private fun createSampleObservationsData(): List<ObservationEntity> {
             payloadJson = """{"records":[{"variable_mapping_id":1,"value":23.5}]}""",
             status = ObservationEntity.SyncStatus.SYNCED,
             remoteId = 1001
-        ),
-        ObservationEntity(
+        ), ObservationEntity(
             obsKey = "ke:102:${now - 7200000}",
             tenantId = "ke",
             stationId = 102,
@@ -565,8 +548,7 @@ private fun createSampleObservationsData(): List<ObservationEntity> {
             payloadJson = """{"records":[{"variable_mapping_id":2,"value":15.2}]}""",
             status = ObservationEntity.SyncStatus.SYNCED,
             remoteId = 1002
-        ),
-        ObservationEntity(
+        ), ObservationEntity(
             obsKey = "ke:103:${now - 10800000}",
             tenantId = "ke",
             stationId = 103,
@@ -581,8 +563,7 @@ private fun createSampleObservationsData(): List<ObservationEntity> {
             payloadJson = """{"records":[{"variable_mapping_id":3,"value":28.1}]}""",
             status = ObservationEntity.SyncStatus.QUEUED,
             remoteId = null
-        ),
-        ObservationEntity(
+        ), ObservationEntity(
             obsKey = "ke:104:${now - 14400000}",
             tenantId = "ke",
             stationId = 104,
@@ -598,8 +579,7 @@ private fun createSampleObservationsData(): List<ObservationEntity> {
             status = ObservationEntity.SyncStatus.FAILED,
             remoteId = null,
             lastError = "Network timeout"
-        ),
-        ObservationEntity(
+        ), ObservationEntity(
             obsKey = "ke:101:${now - 86400000}",
             tenantId = "ke",
             stationId = 101,
@@ -628,17 +608,14 @@ private fun PreviewObservationsScreen() {
     ADLCollectorTheme {
         ObservationsScreenContent(
             summary = ObservationSummary(
-                syncedToday = 5,
-                pendingToday = 2,
-                failedToday = 1
+                syncedToday = 5, pendingToday = 2, failedToday = 1
             ),
             observations = createSampleObservationsData(),
             isLoading = false,
             hasPendingObservations = true, // Has pending items - Sync now should be enabled
             error = null,
             onObservationClick = {},
-            onRetry = {}
-        )
+            onRetry = {})
     }
 }
 
@@ -648,9 +625,7 @@ private fun PreviewSyncingState() {
     ADLCollectorTheme {
         ObservationsScreenContent(
             summary = ObservationSummary(
-                syncedToday = 3,
-                pendingToday = 2,
-                failedToday = 0
+                syncedToday = 3, pendingToday = 2, failedToday = 0
             ),
             observations = createSampleObservationsData(),
             isLoading = false,
@@ -658,8 +633,7 @@ private fun PreviewSyncingState() {
             isSyncing = true, // Show rotating sync icon
             error = null,
             onObservationClick = {},
-            onRetry = {}
-        )
+            onRetry = {})
     }
 }
 
@@ -673,17 +647,14 @@ private fun PreviewNoPendingObservations() {
 
         ObservationsScreenContent(
             summary = ObservationSummary(
-                syncedToday = 7,
-                pendingToday = 0,
-                failedToday = 0
+                syncedToday = 7, pendingToday = 0, failedToday = 0
             ),
             observations = syncedObservations,
             isLoading = false,
             hasPendingObservations = false, // No pending items - Sync now should be disabled
             error = null,
             onObservationClick = {},
-            onRetry = {}
-        )
+            onRetry = {})
     }
 }
 
@@ -698,8 +669,7 @@ private fun PreviewObservationsLoading() {
             hasPendingObservations = false,
             error = null,
             onObservationClick = {},
-            onRetry = {}
-        )
+            onRetry = {})
     }
 }
 
@@ -714,8 +684,7 @@ private fun PreviewObservationsError() {
             hasPendingObservations = false,
             error = "Network connection failed",
             onObservationClick = {},
-            onRetry = {}
-        )
+            onRetry = {})
     }
 }
 
@@ -734,24 +703,18 @@ private fun ObservationsScreenContent(
 ) {
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Observations") },
-                actions = {
-                    SyncButton(
-                        isSyncing = isSyncing,
-                        hasPendingObservations = hasPendingObservations,
-                        onSyncClick = onSyncNow
-                    )
-                }
-            )
-        }
-    ) { padding ->
+            TopAppBar(title = { Text("Observations") }, actions = {
+                SyncButton(
+                    isSyncing = isSyncing,
+                    hasPendingObservations = hasPendingObservations,
+                    onSyncClick = onSyncNow
+                )
+            })
+        }) { padding ->
         when {
             error != null -> {
                 ErrorContent(
-                    error = error,
-                    onRetry = onRetry,
-                    modifier = Modifier.padding(padding)
+                    error = error, onRetry = onRetry, modifier = Modifier.padding(padding)
                 )
             }
 
@@ -774,9 +737,7 @@ private fun PreviewSummaryCard() {
     ADLCollectorTheme {
         TodaySummaryCard(
             summary = ObservationSummary(
-                syncedToday = 5,
-                pendingToday = 2,
-                failedToday = 1
+                syncedToday = 5, pendingToday = 2, failedToday = 1
             )
         )
     }
@@ -800,16 +761,13 @@ private fun PreviewObservationsScreenDark() {
     ADLCollectorTheme(darkTheme = true) {
         ObservationsScreenContent(
             summary = ObservationSummary(
-                syncedToday = 3,
-                pendingToday = 1,
-                failedToday = 0
+                syncedToday = 3, pendingToday = 1, failedToday = 0
             ),
             observations = createSampleObservationsData(),
             isLoading = false,
             hasPendingObservations = true,
             error = null,
             onObservationClick = {},
-            onRetry = {}
-        )
+            onRetry = {})
     }
 }

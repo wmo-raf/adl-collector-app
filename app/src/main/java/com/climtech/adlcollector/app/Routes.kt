@@ -22,4 +22,9 @@ sealed class Route(val route: String) {
         fun build(tenantId: String, stationId: Long, stationName: String) =
             "observation_form/$tenantId/$stationId/${Uri.encode(stationName)}"
     }
+
+    data object ObservationDetail : Route("observation_detail/{tenantId}/{obsKey}") {
+        fun build(tenantId: String, obsKey: String) =
+            "observation_detail/$tenantId/${Uri.encode(obsKey)}"
+    }
 }

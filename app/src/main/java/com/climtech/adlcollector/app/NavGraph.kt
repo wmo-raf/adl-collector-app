@@ -14,6 +14,7 @@ import com.climtech.adlcollector.core.model.TenantConfig
 import com.climtech.adlcollector.core.ui.components.LoadingScreen
 import com.climtech.adlcollector.feature.login.ui.LoginScreen
 import com.climtech.adlcollector.feature.observations.sync.UploadObservationsWorker
+import com.climtech.adlcollector.feature.observations.ui.ObservationDetailScreen
 import com.climtech.adlcollector.feature.observations.ui.ObservationFormScreen
 import com.climtech.adlcollector.feature.stations.presentation.StationsViewModel
 import com.climtech.adlcollector.feature.stations.ui.StationDetailScreen
@@ -98,7 +99,8 @@ fun AppNavGraph(
             arguments = listOf(
                 navArgument("tenantId") { type = NavType.StringType },
                 navArgument("stationId") { type = NavType.LongType },
-                navArgument("stationName") { type = NavType.StringType })) { backStackEntry ->
+                navArgument("stationName") { type = NavType.StringType })
+        ) { backStackEntry ->
             val tenantId = backStackEntry.arguments!!.getString("tenantId")!!
             val stationId = backStackEntry.arguments!!.getLong("stationId")
             val stationName = backStackEntry.arguments!!.getString("stationName")!!
@@ -115,8 +117,8 @@ fun AppNavGraph(
                     onAddObservation = {
                         nav.navigate(Route.ObservationForm.build(tenantId, stationId, stationName))
                     },
-                    onOpenObservation = { obsId ->
-                        // TODO: Navigate to observation detail when available
+                    onOpenObservationDetail = { obsKey ->
+                        nav.navigate(Route.ObservationDetail.build(tenantId, obsKey))
                     },
                     onRefresh = { /* TODO: trigger refresh if you add caching */ })
             }
@@ -128,7 +130,8 @@ fun AppNavGraph(
             arguments = listOf(
                 navArgument("tenantId") { type = NavType.StringType },
                 navArgument("stationId") { type = NavType.LongType },
-                navArgument("stationName") { type = NavType.StringType })) { backStackEntry ->
+                navArgument("stationName") { type = NavType.StringType })
+        ) { backStackEntry ->
             val tenantId = backStackEntry.arguments!!.getString("tenantId")!!
             val stationId = backStackEntry.arguments!!.getLong("stationId")
             val stationName = backStackEntry.arguments!!.getString("stationName")!!
@@ -157,6 +160,23 @@ fun AppNavGraph(
                         nav.popBackStack()
                     })
             }
+        }
+
+        composable(
+            route = Route.ObservationDetail.route,
+            arguments = listOf(
+                navArgument("tenantId") { type = NavType.StringType },
+                navArgument("obsKey") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val tenantId = backStackEntry.arguments!!.getString("tenantId")!!
+            val obsKey = backStackEntry.arguments!!.getString("obsKey")!!
+
+            ObservationDetailScreen(
+                tenantId = tenantId,
+                obsKey = obsKey,
+                onBack = { nav.popBackStack() }
+            )
         }
     }
 }

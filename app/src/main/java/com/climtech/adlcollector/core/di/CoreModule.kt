@@ -11,6 +11,7 @@ import com.climtech.adlcollector.core.data.db.StationDao
 import com.climtech.adlcollector.core.data.db.StationDetailDao
 import com.climtech.adlcollector.core.data.network.NetworkModule
 import com.climtech.adlcollector.feature.login.data.TenantRepository
+import com.climtech.adlcollector.feature.stations.data.StationsRepository
 import com.squareup.moshi.Moshi
 import dagger.Module
 import dagger.Provides
@@ -71,4 +72,12 @@ object CoreModule {
     @Provides
     @Singleton
     fun provideStationDetailDao(db: AppDatabase): StationDetailDao = db.stationDetailDao()
+
+    @Provides
+    @Singleton
+    fun provideStationsRepository(
+        authManager: AuthManager,
+        db: AppDatabase,
+        moshi: Moshi
+    ): StationsRepository = StationsRepository(authManager, db, moshi)
 }
