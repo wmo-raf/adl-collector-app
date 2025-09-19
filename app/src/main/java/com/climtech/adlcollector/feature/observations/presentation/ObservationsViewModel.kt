@@ -13,6 +13,7 @@ import com.climtech.adlcollector.feature.observations.data.ObservationsRepositor
 import com.climtech.adlcollector.feature.observations.sync.UploadObservationsWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -67,18 +68,23 @@ class ObservationsViewModel @Inject constructor(
     private var currentTenantId: String? = null
     private val workManager = WorkManager.getInstance(context)
 
+    private var monitoringJob: Job? = null
+
     fun start(tenantId: String) {
         if (currentTenantId == tenantId) return
         currentTenantId = tenantId
 
         _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
-        viewModelScope.launch {
+        // Cancel previous monitoring job
+        monitoringJob?.cancel()
+
+
+        monitoringJob = viewModelScope.launch {
             try {
                 // Combine observations stream with upload status monitoring
                 combine(
-                    observationDao.streamAllForTenant(tenantId),
-                    monitorUploadWork()
+                    observationDao.streamAllForTenant(tenantId), monitorUploadWork()
                 ) { observations, uploadStatus ->
                     val summary = calculateSummary(observations, tenantId)
 
@@ -94,8 +100,7 @@ class ObservationsViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = "Failed to load observations: ${e.message}"
+                    isLoading = false, error = "Failed to load observations: ${e.message}"
                 )
             }
         }
@@ -107,14 +112,12 @@ class ObservationsViewModel @Inject constructor(
     }
 
     private suspend fun calculateSummary(
-        observations: List<ObservationEntity>,
-        tenantId: String
+        observations: List<ObservationEntity>, tenantId: String
     ): ObservationSummary {
         val today = LocalDate.now()
         val todayObservations = observations.filter { obs ->
-            val obsDate = Instant.ofEpochMilli(obs.obsTimeUtcMs)
-                .atZone(ZoneId.systemDefault())
-                .toLocalDate()
+            val obsDate =
+                Instant.ofEpochMilli(obs.obsTimeUtcMs).atZone(ZoneId.systemDefault()).toLocalDate()
             obsDate == today
         }
 
@@ -128,8 +131,7 @@ class ObservationsViewModel @Inject constructor(
         return ObservationSummary(
             syncedToday = todayObservations.count { it.status == ObservationEntity.SyncStatus.SYNCED },
             pendingToday = todayObservations.count {
-                it.status == ObservationEntity.SyncStatus.QUEUED ||
-                        it.status == ObservationEntity.SyncStatus.UPLOADING
+                it.status == ObservationEntity.SyncStatus.QUEUED || it.status == ObservationEntity.SyncStatus.UPLOADING
             },
             failedToday = todayObservations.count { it.status == ObservationEntity.SyncStatus.FAILED },
             totalPending = totalPending,
@@ -147,14 +149,12 @@ class ObservationsViewModel @Inject constructor(
                     it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED
                 }
 
-                val lastFailedWork = uploadWorks
-                    .filter { it.state == WorkInfo.State.FAILED }
+                val lastFailedWork = uploadWorks.filter { it.state == WorkInfo.State.FAILED }
                     .maxByOrNull { it.outputData.getLong("timestamp", 0) }
 
-                val consecutiveFailures = uploadWorks
-                    .sortedByDescending { it.outputData.getLong("timestamp", 0) }
-                    .takeWhile { it.state == WorkInfo.State.FAILED }
-                    .size
+                val consecutiveFailures =
+                    uploadWorks.sortedByDescending { it.outputData.getLong("timestamp", 0) }
+                        .takeWhile { it.state == WorkInfo.State.FAILED }.size
 
                 val uploadStatus = UploadStatus(
                     isActive = activeWork != null,
@@ -180,7 +180,11 @@ class ObservationsViewModel @Inject constructor(
                     val tenant = tenantLocalStore.getTenantById(tenantId)
                     if (tenant != null) {
                         val submitUrl = tenant.api(
-                            "plugins", "api", "adl-collector", "manual-obs", "submit",
+                            "plugins",
+                            "api",
+                            "adl-collector",
+                            "manual-obs",
+                            "submit",
                             trailingSlash = true
                         ).toString()
 
@@ -266,8 +270,10 @@ class ObservationsViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(error = null)
     }
 
+    //  cleanup
     override fun onCleared() {
         super.onCleared()
+        monitoringJob?.cancel()
         // Hide any ongoing upload notifications when the ViewModel is cleared
         notificationHelper.hideUploadProgress()
     }

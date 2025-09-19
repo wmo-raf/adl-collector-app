@@ -29,14 +29,14 @@ class StationsViewModel @Inject constructor(
     private val repo: StationsRepository
 ) : ViewModel() {
 
-    private var streamJob: Job? = null
+    private var stationsStreamJob: Job? = null
     private val _state = MutableStateFlow(StationsUiState())
     val state: StateFlow<StationsUiState> = _state.asStateFlow()
 
     fun start(tenant: TenantConfig) {
         // Start streaming cache immediately
-        streamJob?.cancel()
-        streamJob = viewModelScope.launch {
+        stationsStreamJob?.cancel()
+        stationsStreamJob = viewModelScope.launch {
             repo.stationsStream(tenant.id).collect { cached ->
                 _state.update { currentState ->
                     currentState.copy(
@@ -145,6 +145,6 @@ class StationsViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        streamJob?.cancel()
+        stationsStreamJob?.cancel()
     }
 }

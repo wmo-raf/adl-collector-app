@@ -74,13 +74,10 @@ class ObservationFormViewModel @Inject constructor(
     private var station: StationDetail? = null
     private var schedule: ScheduleMode? = null
     private var tz: ZoneId = ZoneOffset.UTC
-    private var streamJob: Job? = null
+    private var streamJob: Job? = null // track job
 
     fun start(
-        tenant: TenantConfig,
-        stationId: Long,
-        stationName: String,
-        submitEndpointUrl: String
+        tenant: TenantConfig, stationId: Long, stationName: String, submitEndpointUrl: String
     ) {
         this.tenant = tenant
         this.stationId = stationId
@@ -88,7 +85,7 @@ class ObservationFormViewModel @Inject constructor(
 
         _ui.value = _ui.value.copy(loading = true, stationName = stationName, error = null)
 
-        streamJob?.cancel()
+        streamJob?.cancel() // cancel previous job
         streamJob = viewModelScope.launch {
             stationsRepo.stationDetailStream(tenant.id, stationId).collectLatest { d ->
                 if (d == null) {
@@ -159,9 +156,7 @@ class ObservationFormViewModel @Inject constructor(
     }
 
     private fun recomputeTime(
-        requestedLocal: LocalDateTime?,
-        variablesUi: List<ObservationVariableUi>,
-        d: StationDetail
+        requestedLocal: LocalDateTime?, variablesUi: List<ObservationVariableUi>, d: StationDetail
     ) {
         val mode = schedule ?: return
         val now = Instant.now()
@@ -195,8 +190,7 @@ class ObservationFormViewModel @Inject constructor(
         val records = state.variables.mapNotNull {
             val num = it.valueText.toDoubleOrNull()
             if (num == null) null else mapOf(
-                "variable_mapping_id" to it.id,
-                "value" to num
+                "variable_mapping_id" to it.id, "value" to num
             )
         }
 
@@ -208,8 +202,7 @@ class ObservationFormViewModel @Inject constructor(
 
             // Store minimal payload for repo to finalize on upload
             val payload = mapOf(
-                "records" to records,
-                "metadata" to mapOf(
+                "records" to records, "metadata" to mapOf(
                     "late" to state.late,
                     "duplicate_policy" to duplicatePolicy,
                     "reason" to reason,
@@ -242,4 +235,11 @@ class ObservationFormViewModel @Inject constructor(
 
     fun getSubmitEndpoint(): String = submitEndpoint
     fun tenantId(): String = tenant.id
+
+    // cleanup
+    override fun onCleared() {
+        super.onCleared()
+        streamJob?.cancel()
+    }
+
 }
