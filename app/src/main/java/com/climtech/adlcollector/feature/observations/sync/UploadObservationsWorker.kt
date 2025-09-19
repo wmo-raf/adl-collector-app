@@ -22,13 +22,19 @@ import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkerParameters
 import com.climtech.adlcollector.core.auth.TenantLocalStore
+import com.climtech.adlcollector.core.net.NetworkException
 import com.climtech.adlcollector.feature.observations.data.ObservationsRepository
 import com.squareup.moshi.JsonDataException
+import com.squareup.moshi.JsonEncodingException
 import com.squareup.moshi.Moshi
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.delay
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.time.Duration
+import javax.net.ssl.SSLException
 import kotlin.math.min
 import kotlin.math.pow
 
@@ -355,15 +361,64 @@ class UploadObservationsWorker @AssistedInject constructor(
 
     private fun isPermanentError(exception: Exception): Boolean {
         return when (exception) {
-            is JsonDataException -> true // Corrupted data
-            is IllegalArgumentException -> true // Invalid configuration
-            is SecurityException -> true // Permission denied
+            // Data/Format errors - don't retry
+            is JsonDataException -> true
+            is JsonEncodingException -> true
+            is IllegalArgumentException -> true
+            is SecurityException -> true
+
+            // Network/Connection errors - should retry
+            is UnknownHostException -> false
+            is ConnectException -> false
+            is SocketTimeoutException -> false
+            is SSLException -> false
+            is java.io.IOException -> {
+                // Some IOExceptions are permanent, others aren't
+                when {
+                    exception.message?.contains("certificate", ignoreCase = true) == true -> true
+                    exception.message?.contains("SSL", ignoreCase = true) == true -> true
+                    else -> false // Most IO errors are temporary
+                }
+            }
+
+            // NetworkException types from our custom exceptions
+            is NetworkException -> when (exception) {
+                is NetworkException.Unauthorized -> true
+                is NetworkException.Forbidden -> true
+                is NetworkException.NotFound -> true
+                is NetworkException.Client -> {
+                    // 4xx errors are usually permanent except rate limiting
+                    exception.code in 400..499 && exception.code != 429
+                }
+
+                is NetworkException.Server -> false // 5xx should retry
+                is NetworkException.Offline -> false
+                is NetworkException.Timeout -> false
+                is NetworkException.EmptyBody -> false
+                is NetworkException.Serialization -> true
+                is NetworkException.UnexpectedBody -> true
+                is NetworkException.LoginRedirect -> true
+                is NetworkException.Unknown -> false
+            }
+
+            // Fallback: check HTTP status codes in message
             else -> exception.message?.let { msg ->
-                // Check for HTTP status codes that shouldn't be retried
-                msg.contains("401") || // Unauthorized
-                        msg.contains("403") || // Forbidden
-                        msg.contains("404") || // Not Found
-                        msg.contains("422")    // Unprocessable Entity
+                when {
+                    // Authentication/Authorization - permanent
+                    msg.contains("401") || msg.contains("403") -> true
+                    // Not Found - permanent
+                    msg.contains("404") -> true
+                    // Validation errors - permanent
+                    msg.contains("422") || msg.contains("400") -> true
+                    // Rate limiting - should retry
+                    msg.contains("429") -> false
+                    // Server errors - should retry
+                    msg.contains("5") && (msg.contains("50") || msg.contains("51") || msg.contains("52") || msg.contains(
+                        "53"
+                    )) -> false
+
+                    else -> false
+                }
             } ?: false
         }
     }
