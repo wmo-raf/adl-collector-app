@@ -14,6 +14,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
 import com.climtech.adlcollector.core.auth.OAuthManager
 import com.climtech.adlcollector.core.auth.OAuthResult
+import com.climtech.adlcollector.core.auth.TenantLocalStore
 import com.climtech.adlcollector.core.auth.TenantManager
 import com.climtech.adlcollector.core.ui.components.ErrorScreen
 import com.climtech.adlcollector.core.ui.components.LoadingScreen
@@ -21,6 +22,7 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -31,6 +33,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var tenantManager: TenantManager
+
+    @Inject
+    lateinit var tenantLocalStore: TenantLocalStore
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -122,12 +127,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // In MainActivity.onCreate()
     private fun updateUI() {
         setContent {
             val tenantState by tenantManager.state.collectAsState()
             val oauthState by oauthManager.state.collectAsState()
 
-            // Simple error logic - only show errors when not in any active state
+            // Show error only when not in any active state
             val showError =
                 !tenantState.isLoading && !oauthState.isInProgress && !oauthState.isLoggedIn && (tenantState.error != null || oauthState.error != null)
 
@@ -155,7 +161,8 @@ class MainActivity : ComponentActivity() {
                         startDestination = Route.Splash.route,
                         tenants = tenantState.tenants,
                         selectedTenantId = tenantState.selectedTenantId,
-                        isLoggedIn = oauthState.isLoggedIn,
+                        // ADD THIS CHECK: if we have stored tokens, consider it logged in
+                        isLoggedIn = oauthState.isLoggedIn || hasStoredAuth(tenantState.selectedTenantId),
                         authInFlight = oauthState.isInProgress,
                         tenantsLoading = tenantState.isLoading,
                         onSelectTenant = ::onSelectTenant,
@@ -170,10 +177,17 @@ class MainActivity : ComponentActivity() {
                             }
                         })
 
-                    // Handle navigation after successful login
-                    LaunchedEffect(oauthState.isLoggedIn, tenantState.selectedTenantId) {
+                    // Handle navigation after successful login OR when we detect stored auth
+                    LaunchedEffect(
+                        oauthState.isLoggedIn,
+                        tenantState.selectedTenantId,
+                        hasStoredAuth(tenantState.selectedTenantId)
+                    ) {
                         val tenantId = tenantState.selectedTenantId
-                        if (oauthState.isLoggedIn && !tenantId.isNullOrBlank()) {
+                        val shouldNavigateToMain =
+                            (oauthState.isLoggedIn || hasStoredAuth(tenantId)) && !tenantId.isNullOrBlank()
+
+                        if (shouldNavigateToMain) {
                             nav.navigate(Route.Main.build(tenantId)) {
                                 popUpTo(nav.graph.startDestinationId) { inclusive = true }
                                 launchSingleTop = true
@@ -184,5 +198,15 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun hasStoredAuth(tenantId: String?): Boolean {
+        return if (tenantId != null) {
+            runBlocking {
+                val accessToken = tenantLocalStore.getAccessToken(tenantId)
+                val refreshToken = tenantLocalStore.getRefreshToken(tenantId)
+                !accessToken.isNullOrBlank() && !refreshToken.isNullOrBlank()
+            }
+        } else false
     }
 }
