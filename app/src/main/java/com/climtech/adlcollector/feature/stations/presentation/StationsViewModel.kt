@@ -107,6 +107,12 @@ class StationsViewModel @Inject constructor(
         _state.update { it.copy(error = null) }
     }
 
+    fun clearCache(tenant: TenantConfig) {
+        viewModelScope.launch {
+            repo.clearCache(tenant.id)
+        }
+    }
+
     fun retryRefresh(tenant: TenantConfig) {
         refresh(tenant, showSpinner = false)
     }

@@ -201,12 +201,19 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun hasStoredAuth(tenantId: String?): Boolean {
-        return if (tenantId != null) {
-            runBlocking {
+        if (tenantId.isNullOrBlank()) {
+            return false
+        }
+
+        return runBlocking {
+            try {
                 val accessToken = tenantLocalStore.getAccessToken(tenantId)
                 val refreshToken = tenantLocalStore.getRefreshToken(tenantId)
-                !accessToken.isNullOrBlank() && !refreshToken.isNullOrBlank()
+                val hasTokens = !accessToken.isNullOrBlank() && !refreshToken.isNullOrBlank()
+                hasTokens
+            } catch (e: Exception) {
+                false
             }
-        } else false
+        }
     }
 }

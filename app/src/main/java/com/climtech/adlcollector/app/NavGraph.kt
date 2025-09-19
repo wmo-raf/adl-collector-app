@@ -88,7 +88,10 @@ fun AppNavGraph(
             } else {
                 val vm: StationsViewModel = hiltViewModel(key = "stations-$tenantId")
                 MainScreen(
-                    outerNav = nav, tenant = tenant, stationsVm = vm, onLogout = onLogout
+                    outerNav = nav,
+                    tenant = tenant,
+                    stationsVm = vm,
+                    onLogout = onLogout
                 )
             }
         }

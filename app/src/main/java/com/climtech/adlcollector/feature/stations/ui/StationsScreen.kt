@@ -25,12 +25,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Domain
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -66,6 +66,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.climtech.adlcollector.core.model.TenantConfig
 import com.climtech.adlcollector.core.ui.theme.ADLCollectorTheme
+import com.climtech.adlcollector.core.util.rememberNetworkStatus
 import com.climtech.adlcollector.feature.stations.data.net.Station
 import com.climtech.adlcollector.feature.stations.presentation.StationsUiState
 import com.climtech.adlcollector.feature.stations.presentation.StationsViewModel
@@ -82,6 +83,8 @@ fun StationsScreen(
     LaunchedEffect(tenant.id) {
         viewModel.start(tenant) // start stream + background refresh
     }
+
+// Helper function to extract domain from URL
 
     StationsContent(
         tenant = tenant,
@@ -217,11 +220,13 @@ private fun StationsList(
     }
 }
 
-
 @Composable
 private fun TenantInfoCard(
     tenant: TenantConfig, modifier: Modifier = Modifier
 ) {
+    // Add network status detection
+    val isOnline = rememberNetworkStatus()
+
     ElevatedCard(
         modifier = modifier.fillMaxWidth(),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp),
@@ -262,42 +267,25 @@ private fun TenantInfoCard(
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Filled.Verified,
+                            imageVector = Icons.Filled.Language,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                            modifier = Modifier.size(14.dp)
                         )
                         Text(
-                            text = "Connected",
-                            style = MaterialTheme.typography.labelMedium,
+                            text = extractDomain(tenant.baseUrl),
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                         )
                     }
                 }
             }
 
-            // Server information
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Language,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
-                    modifier = Modifier.size(16.dp)
-                )
-                Text(
-                    text = extractDomain(tenant.baseUrl),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            // Creative network status section
+            NetworkStatusSection(isOnline = isOnline)
         }
     }
 }
@@ -479,7 +467,76 @@ private fun ErrorContent(
     }
 }
 
-// Helper function to extract domain from URL
+@Composable
+private fun NetworkStatusSection(isOnline: Boolean) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = if (isOnline) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+        } else {
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+        }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Animated status indicator
+            Box(
+                modifier = Modifier.size(8.dp), contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    modifier = Modifier.size(8.dp), shape = CircleShape, color = if (isOnline) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.outline
+                    }
+                ) {}
+            }
+
+            // Status text and description
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (isOnline) "Connected" else "No Connection",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = if (isOnline) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+                Text(
+                    text = if (isOnline) {
+                        "You are online"
+                    } else {
+                        "Using offline data only"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                )
+            }
+
+            // Connection type icon
+            Icon(
+                imageVector = if (isOnline) {
+                    Icons.Filled.CloudDone
+                } else {
+                    Icons.Filled.CloudOff
+                }, contentDescription = null, tint = if (isOnline) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                }, modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
 private fun extractDomain(url: String): String {
     return try {
         val uri = URI(url)
@@ -512,8 +569,8 @@ private fun PreviewEnhancedStationsLoaded() {
     ADLCollectorTheme {
         StationsContent(
             tenant = sampleTenant(), state = StationsUiState(
-            loading = false, stations = sampleStations(), error = null
-        ), onRefresh = {}, onRetryRefresh = {}, onClearError = {}, onOpenStation = { _, _ -> })
+                loading = false, stations = sampleStations(), error = null
+            ), onRefresh = {}, onRetryRefresh = {}, onClearError = {}, onOpenStation = { _, _ -> })
     }
 }
 
@@ -525,8 +582,8 @@ private fun PreviewEnhancedStationsDark() {
     ADLCollectorTheme(darkTheme = true) {
         StationsContent(
             tenant = sampleTenant(), state = StationsUiState(
-            loading = false, stations = sampleStations(), error = null
-        ), onRefresh = {}, onRetryRefresh = {}, onClearError = {}, onOpenStation = { _, _ -> })
+                loading = false, stations = sampleStations(), error = null
+            ), onRefresh = {}, onRetryRefresh = {}, onClearError = {}, onOpenStation = { _, _ -> })
     }
 }
 

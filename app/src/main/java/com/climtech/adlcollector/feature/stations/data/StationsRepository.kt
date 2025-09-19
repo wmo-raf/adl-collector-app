@@ -126,12 +126,15 @@ class StationsRepository @Inject constructor(
 
     /** Refresh detail from network and update cache. Keeps old cache on error. */
     suspend fun refreshStationDetail(
-        tenant: TenantConfig,
-        stationId: Long
+        tenant: TenantConfig, stationId: Long
     ): Result<Unit> {
         val api = apiFor(tenant)
         val url = tenant.api(
-            "plugins", "api", "adl-collector", "station-link", stationId.toString(),
+            "plugins",
+            "api",
+            "adl-collector",
+            "station-link",
+            stationId.toString(),
             trailingSlash = false
         ).toString()
         val res = try {
@@ -157,8 +160,13 @@ class StationsRepository @Inject constructor(
                 Result.Ok(Unit)
             }
 
-            is Result.Err ->
-                Result.Err(res.error)
+            is Result.Err -> Result.Err(res.error)
         }
+    }
+
+
+    suspend fun clearCache(tenantId: String) {
+        dao.clearForTenant(tenantId)
+        detailDao.clearForTenant(tenantId)
     }
 }
