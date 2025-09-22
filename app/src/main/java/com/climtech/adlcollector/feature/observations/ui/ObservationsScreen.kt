@@ -138,6 +138,7 @@ private fun SyncButton(
     }
 }
 
+
 @Composable
 private fun ObservationsContent(
     padding: PaddingValues,
@@ -146,66 +147,73 @@ private fun ObservationsContent(
     isLoading: Boolean,
     onObservationClick: (ObservationEntity) -> Unit
 ) {
-    LazyColumn(
+    Column(
         modifier = Modifier
             .padding(padding)
             .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        contentPadding = PaddingValues(vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // Summary Card
-        item {
-            TodaySummaryCard(summary = summary)
-        }
+        TodaySummaryCard(
+            summary = summary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
+        )
 
-        // Loading indicator
-        if (isLoading) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    androidx.compose.material3.CircularProgressIndicator()
+        // List Header
+        Text(
+            "All Observations",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        )
+
+        // Scrollable content below
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Loading indicator
+            if (isLoading) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        androidx.compose.material3.CircularProgressIndicator()
+                    }
                 }
             }
-        }
 
-        // Observations List Header
-        item {
-            Text(
-                "All Observations",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(top = 8.dp)
-            )
-        }
+            if (observations.isEmpty() && !isLoading) {
+                item {
+                    EmptyObservationsState()
+                }
+            } else {
+                // Table header
+                item {
+                    ObservationsTableHeader()
+                }
 
-        if (observations.isEmpty() && !isLoading) {
-            item {
-                EmptyObservationsState()
-            }
-        } else {
-            // Table header
-            item {
-                ObservationsTableHeader()
-            }
-
-            // Observations list
-            items(observations) { observation ->
-                ObservationRow(
-                    observation = observation, onClick = { onObservationClick(observation) })
-                HorizontalDivider()
+                // Observations list
+                items(observations) { observation ->
+                    ObservationRow(
+                        observation = observation, onClick = { onObservationClick(observation) })
+                    HorizontalDivider()
+                }
             }
         }
     }
 }
 
+
 @Composable
-private fun TodaySummaryCard(summary: ObservationSummary) {
+private fun TodaySummaryCard(
+    summary: ObservationSummary, modifier: Modifier = Modifier
+) {
     ElevatedCard(
-        modifier = Modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)
