@@ -11,6 +11,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -34,13 +35,27 @@ fun MainScreen(
     outerNav: NavHostController,
     tenant: TenantConfig,
     stationsVm: StationsViewModel,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    initialTab: String? = null
 ) {
     val innerNav = rememberNavController()
 
     val currentDest = innerNav.currentBackStackEntryAsState().value?.destination
 
     val observationsVm: ObservationsViewModel = hiltViewModel(key = "observations-${tenant.id}")
+
+    // Handle initial tab selection
+    LaunchedEffect(initialTab) {
+        if (initialTab != null && BottomDest.items.any { it.route == initialTab }) {
+            innerNav.navigate(initialTab) {
+                popUpTo(innerNav.graph.findStartDestination().id) {
+                    saveState = true
+                }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
+    }
 
     Scaffold(
         bottomBar = {

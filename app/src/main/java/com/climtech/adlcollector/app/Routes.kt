@@ -7,8 +7,9 @@ sealed class Route(val route: String) {
 
     data object Splash : Route("splash")
 
-    data object Main : Route("main/{tenantId}") {
-        fun build(tenantId: String) = "main/$tenantId"
+    data object Main : Route("main/{tenantId}?tab={tab}") {
+        fun build(tenantId: String, tab: String? = null) =
+            if (tab != null) "main/$tenantId?tab=$tab" else "main/$tenantId"
     }
 
     //  Station detail
@@ -16,6 +17,7 @@ sealed class Route(val route: String) {
         fun build(tenantId: String, stationId: Long, stationName: String) =
             "station_detail/$tenantId/$stationId/${Uri.encode(stationName)}"
     }
+
 
     // Observation form outside the bottom bar
     data object ObservationForm : Route("observation_form/{tenantId}/{stationId}/{stationName}") {

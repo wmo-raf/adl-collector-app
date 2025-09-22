@@ -70,10 +70,17 @@ fun AppNavGraph(
         // Container that shows the BottomBar + inner tabs
         composable(
             route = Route.Main.route,
-            arguments = listOf(navArgument("tenantId") { type = NavType.StringType })
-        ) { backStackEntry ->
+            arguments = listOf(
+                navArgument("tenantId") { type = NavType.StringType },
+                navArgument("tab") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                })) { backStackEntry ->
             val tenantId = backStackEntry.arguments!!.getString("tenantId")!!
+            val initialTab = backStackEntry.arguments?.getString("tab")
             val tenant = tenants.firstOrNull { it.id == tenantId }
+
             if (tenant == null) {
                 // Fallback to login if tenant list hasn't loaded yet
                 LoginScreen(
@@ -91,7 +98,8 @@ fun AppNavGraph(
                     outerNav = nav,
                     tenant = tenant,
                     stationsVm = vm,
-                    onLogout = onLogout
+                    onLogout = onLogout,
+                    initialTab = initialTab
                 )
             }
         }
@@ -123,9 +131,20 @@ fun AppNavGraph(
                     onOpenObservationDetail = { obsKey ->
                         nav.navigate(Route.ObservationDetail.build(tenantId, obsKey))
                     },
+                    onViewAllObservations = {
+                        nav.navigate(Route.Main.build(tenantId, BottomDest.Observations.route)) {
+                            popUpTo(Route.Main.build(tenantId)) {
+                                inclusive = false
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
                     onRefresh = { /* TODO: trigger refresh if you add caching */ })
+
             }
         }
+
 
         // Observation Form - Also outside bottom bar
         composable(
@@ -169,17 +188,13 @@ fun AppNavGraph(
             route = Route.ObservationDetail.route,
             arguments = listOf(
                 navArgument("tenantId") { type = NavType.StringType },
-                navArgument("obsKey") { type = NavType.StringType }
-            )
+                navArgument("obsKey") { type = NavType.StringType })
         ) { backStackEntry ->
             val tenantId = backStackEntry.arguments!!.getString("tenantId")!!
             val obsKey = backStackEntry.arguments!!.getString("obsKey")!!
 
             ObservationDetailScreen(
-                tenantId = tenantId,
-                obsKey = obsKey,
-                onBack = { nav.popBackStack() }
-            )
+                tenantId = tenantId, obsKey = obsKey, onBack = { nav.popBackStack() })
         }
     }
 }

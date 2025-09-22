@@ -116,7 +116,8 @@ fun StationDetailScreen(
     stationName: String,
     onBack: () -> Unit,
     onAddObservation: () -> Unit,
-    onOpenObservationDetail: (obsKey: String) -> Unit,  // Add this new callback
+    onOpenObservationDetail: (obsKey: String) -> Unit,
+    onViewAllObservations: () -> Unit,
     onRefresh: () -> Unit,
     vm: StationDetailViewModel = hiltViewModel()
 ) {
@@ -182,7 +183,8 @@ fun StationDetailScreen(
                                 padding = padding,
                                 onAddObservation = onAddObservation,
                                 recent = recent,
-                                onOpenObservationDetail = onOpenObservationDetail
+                                onOpenObservationDetail = onOpenObservationDetail,
+                                onViewAllObservations = onViewAllObservations
                             )
                         }
 
@@ -299,6 +301,7 @@ private fun DetailBody(
     onAddObservation: () -> Unit,
     recent: List<ObservationEntity>,
     onOpenObservationDetail: (obsKey: String) -> Unit,
+    onViewAllObservations: () -> Unit = {}
 ) {
     val windowStatus = getWindowStatus(
         detail.timezone, detail.schedule.config, detail.schedule.mode == "fixed_local"
@@ -423,6 +426,32 @@ private fun DetailBody(
                     ObservationsRow(
                         obs = obs, onClick = { onOpenObservationDetail(obs.obsKey) })
                     HorizontalDivider()
+                }
+
+                // View More Button - Add this item after the observations list
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        TextButton(
+                            onClick = onViewAllObservations, modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text("View all observations")
+                                Icon(
+                                    imageVector = Icons.Filled.ChevronRight,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
