@@ -25,18 +25,26 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -45,6 +53,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -63,6 +74,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,13 +91,18 @@ fun ObservationsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Observations") }, actions = {
-                SyncButton(
-                    isSyncing = uiState.isSyncing,
-                    hasPendingObservations = uiState.hasPendingObservations,
-                    onSyncClick = { vm.syncNow() })
-            })
-        }) { padding ->
+            TopAppBar(
+                title = { Text("Observations") },
+                actions = {
+                    SyncButton(
+                        isSyncing = uiState.isSyncing,
+                        hasPendingObservations = uiState.hasPendingObservations,
+                        onSyncClick = { vm.syncNow() }
+                    )
+                }
+            )
+        }
+    ) { padding ->
         when {
             uiState.error != null -> {
                 ErrorContent(
@@ -100,10 +117,12 @@ fun ObservationsScreen(
                     padding = padding,
                     summary = uiState.summary,
                     observations = uiState.observations,
+                    selectedDate = uiState.selectedDate,
+                    availableDates = uiState.availableDates,
                     isLoading = uiState.isLoading,
-                    onObservationClick = {
-                        onObservationClick(it)
-                    })
+                    onObservationClick = onObservationClick,
+                    onDateSelected = { date -> vm.selectDate(date) }
+                )
             }
         }
     }
@@ -111,25 +130,34 @@ fun ObservationsScreen(
 
 @Composable
 private fun SyncButton(
-    isSyncing: Boolean, hasPendingObservations: Boolean, onSyncClick: () -> Unit
+    isSyncing: Boolean,
+    hasPendingObservations: Boolean,
+    onSyncClick: () -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "sync_rotation")
 
     val rotationAngle by infiniteTransition.animateFloat(
-        initialValue = 0f, targetValue = 360f, animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = LinearEasing), repeatMode = RepeatMode.Restart
-        ), label = "rotation"
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
     )
 
     IconButton(
-        onClick = onSyncClick, enabled = hasPendingObservations && !isSyncing
+        onClick = onSyncClick,
+        enabled = hasPendingObservations && !isSyncing
     ) {
         Icon(
-            Icons.Filled.CloudSync, contentDescription = when {
+            Icons.Filled.CloudSync,
+            contentDescription = when {
                 isSyncing -> "Syncing observations..."
                 hasPendingObservations -> "Sync pending observations"
                 else -> "No observations to sync"
-            }, modifier = if (isSyncing) {
+            },
+            modifier = if (isSyncing) {
                 Modifier.rotate(rotationAngle)
             } else {
                 Modifier
@@ -138,28 +166,47 @@ private fun SyncButton(
     }
 }
 
-
 @Composable
 private fun ObservationsContent(
     padding: PaddingValues,
     summary: ObservationSummary,
     observations: List<ObservationEntity>,
+    selectedDate: LocalDate,
+    availableDates: List<LocalDate>,
     isLoading: Boolean,
-    onObservationClick: (ObservationEntity) -> Unit
+    onObservationClick: (ObservationEntity) -> Unit,
+    onDateSelected: (LocalDate) -> Unit
 ) {
     Column(
         modifier = Modifier
             .padding(padding)
             .fillMaxSize()
     ) {
-        // Summary Card
+        // Summary Card (shows today's summary regardless of selected date)
         TodaySummaryCard(
-            summary = summary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
+            summary = summary,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
         )
 
-        // List Header
+        // Compact Dropdown Date Selector
+        CompactDateDropdown(
+            selectedDate = selectedDate,
+            availableDates = availableDates,
+            onDateSelected = onDateSelected,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        )
+
+        // List Header with selected date
+        val dateFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
+        val isToday = selectedDate == LocalDate.now()
+        val headerText = if (isToday) {
+            "Today's Observations"
+        } else {
+            "Observations for ${selectedDate.format(dateFormatter)}"
+        }
+
         Text(
-            "All Observations",
+            headerText,
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
         )
@@ -181,14 +228,14 @@ private fun ObservationsContent(
                             .padding(16.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        androidx.compose.material3.CircularProgressIndicator()
+                        CircularProgressIndicator()
                     }
                 }
             }
 
             if (observations.isEmpty() && !isLoading) {
                 item {
-                    EmptyObservationsState()
+                    EmptyObservationsState(selectedDate = selectedDate)
                 }
             } else {
                 // Table header
@@ -199,7 +246,9 @@ private fun ObservationsContent(
                 // Observations list
                 items(observations) { observation ->
                     ObservationRow(
-                        observation = observation, onClick = { onObservationClick(observation) })
+                        observation = observation,
+                        onClick = { onObservationClick(observation) }
+                    )
                     HorizontalDivider()
                 }
             }
@@ -207,16 +256,113 @@ private fun ObservationsContent(
     }
 }
 
+// Compact Dropdown Selector
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CompactDateDropdown(
+    selectedDate: LocalDate,
+    availableDates: List<LocalDate>,
+    onDateSelected: (LocalDate) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val today = LocalDate.now()
+
+    // Combine today with available dates and sort by most recent first
+    val allDates = (availableDates + today).distinct().sortedDescending()
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = modifier
+    ) {
+        OutlinedTextField(
+            value = formatDateForDropdown(selectedDate),
+            onValueChange = { },
+            readOnly = true,
+            label = { Text("Select Date") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            leadingIcon = {
+                Icon(
+                    Icons.Filled.DateRange,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+            },
+            modifier = Modifier
+                .menuAnchor()
+                .fillMaxWidth(),
+            singleLine = true
+        )
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            allDates.forEach { date ->
+                val isSelected = selectedDate == date
+                val hasObservations = availableDates.contains(date)
+
+                DropdownMenuItem(
+                    text = {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = formatDateForDropdown(date),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                                if (hasObservations && date != today) {
+                                    Text(
+                                        text = "Has observations",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                } else if (date == today) {
+                                    Text(
+                                        text = "Today",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+
+                            if (isSelected) {
+                                Icon(
+                                    Icons.Filled.Check,
+                                    contentDescription = "Selected",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    },
+                    onClick = {
+                        onDateSelected(date)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
 
 @Composable
 private fun TodaySummaryCard(
-    summary: ObservationSummary, modifier: Modifier = Modifier
+    summary: ObservationSummary,
+    modifier: Modifier = Modifier
 ) {
     ElevatedCard(
         modifier = modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
                 "Today's Summary",
@@ -225,7 +371,8 @@ private fun TodaySummaryCard(
             )
 
             Row(
-                modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 SummaryItem(
                     icon = Icons.Filled.CheckCircle,
@@ -257,7 +404,11 @@ private fun TodaySummaryCard(
 
 @Composable
 private fun SummaryItem(
-    icon: ImageVector, count: Int, label: String, color: Color, modifier: Modifier = Modifier
+    icon: ImageVector,
+    count: Int,
+    label: String,
+    color: Color,
+    modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier,
@@ -272,7 +423,9 @@ private fun SummaryItem(
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
-                    imageVector = icon, contentDescription = null, modifier = Modifier.size(24.dp)
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp)
                 )
             }
         }
@@ -320,17 +473,19 @@ private fun ObservationsTableHeader() {
     HorizontalDivider()
 }
 
-
 @Composable
 private fun ObservationRow(
-    observation: ObservationEntity, onClick: () -> Unit
+    observation: ObservationEntity,
+    onClick: () -> Unit
 ) {
-    Row(modifier = Modifier
-        .fillMaxWidth()
-        .clickable { onClick() }
-        .padding(vertical = 12.dp),
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically) {
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Column(
             modifier = Modifier.weight(1f)
         ) {
@@ -349,12 +504,14 @@ private fun ObservationRow(
         Spacer(Modifier.width(8.dp))
 
         StatusPill(
-            status = observation.status, isLate = observation.late
+            status = observation.status,
+            isLate = observation.late
         )
 
         // Chevron
         Box(
-            modifier = Modifier.weight(0.15f), contentAlignment = Alignment.CenterEnd
+            modifier = Modifier.weight(0.15f),
+            contentAlignment = Alignment.CenterEnd
         ) {
             Icon(
                 imageVector = Icons.Filled.ChevronRight,
@@ -368,7 +525,8 @@ private fun ObservationRow(
 
 @Composable
 private fun StatusPill(
-    status: ObservationEntity.SyncStatus, isLate: Boolean = false
+    status: ObservationEntity.SyncStatus,
+    isLate: Boolean = false
 ) {
     val (colorInfo, icon) = when (status) {
         ObservationEntity.SyncStatus.SYNCED -> {
@@ -399,7 +557,9 @@ private fun StatusPill(
 
     val (backgroundColor, textColor, label) = colorInfo
     Surface(
-        shape = MaterialTheme.shapes.small, color = backgroundColor, contentColor = textColor
+        shape = MaterialTheme.shapes.small,
+        color = backgroundColor,
+        contentColor = textColor
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -407,7 +567,9 @@ private fun StatusPill(
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Icon(
-                imageVector = icon, contentDescription = null, modifier = Modifier.size(12.dp)
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(12.dp)
             )
             Text(
                 text = label,
@@ -419,7 +581,11 @@ private fun StatusPill(
 }
 
 @Composable
-private fun EmptyObservationsState() {
+private fun EmptyObservationsState(selectedDate: LocalDate) {
+    val today = LocalDate.now()
+    val isToday = selectedDate == today
+    val dateFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -443,22 +609,29 @@ private fun EmptyObservationsState() {
         }
 
         Text(
-            text = "No observations yet",
+            text = if (isToday) "No observations today" else "No observations",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface
         )
 
         Text(
-            text = "Observations you submit will appear here",
+            text = if (isToday) {
+                "Observations you submit today will appear here"
+            } else {
+                "No observations found for ${selectedDate.format(dateFormatter)}"
+            },
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
         )
     }
 }
 
 @Composable
 private fun ErrorContent(
-    error: String, onRetry: () -> Unit, modifier: Modifier = Modifier
+    error: String,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier
@@ -486,7 +659,7 @@ private fun ErrorContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.height(16.dp))
-        androidx.compose.material3.Button(onClick = onRetry) {
+        Button(onClick = onRetry) {
             Text("Retry")
         }
     }
@@ -496,20 +669,14 @@ private fun ErrorContent(
    Helper Functions
    --------------------------- */
 
-private fun calculateSummary(observations: List<ObservationEntity>): ObservationSummary {
+private fun formatDateForDropdown(date: LocalDate): String {
     val today = LocalDate.now()
-    val todayObservations = observations.filter { obs ->
-        val obsDate =
-            Instant.ofEpochMilli(obs.obsTimeUtcMs).atZone(ZoneId.systemDefault()).toLocalDate()
-        obsDate == today
+    return when {
+        date == today -> "Today"
+        date == today.minusDays(1) -> "Yesterday"
+        date.year == today.year -> date.format(DateTimeFormatter.ofPattern("MMM d"))
+        else -> date.format(DateTimeFormatter.ofPattern("MMM d, yyyy"))
     }
-
-    return ObservationSummary(
-        syncedToday = todayObservations.count { it.status == ObservationEntity.SyncStatus.SYNCED },
-        pendingToday = todayObservations.count {
-            it.status == ObservationEntity.SyncStatus.QUEUED || it.status == ObservationEntity.SyncStatus.UPLOADING
-        },
-        failedToday = todayObservations.count { it.status == ObservationEntity.SyncStatus.FAILED })
 }
 
 private fun formatObservationTime(utcMs: Long, timezone: String): String {
@@ -532,7 +699,7 @@ private fun createSampleObservationsData(): List<ObservationEntity> {
             stationId = 101,
             stationName = "Nairobi Weather Station",
             timezone = "Africa/Nairobi",
-            obsTimeUtcMs = now - 3600000, // 1 hour ago
+            obsTimeUtcMs = now - 3600000,
             createdAtMs = now - 3600000,
             updatedAtMs = now - 3600000,
             late = false,
@@ -541,13 +708,14 @@ private fun createSampleObservationsData(): List<ObservationEntity> {
             payloadJson = """{"records":[{"variable_mapping_id":1,"value":23.5}]}""",
             status = ObservationEntity.SyncStatus.SYNCED,
             remoteId = 1001
-        ), ObservationEntity(
+        ),
+        ObservationEntity(
             obsKey = "ke:102:${now - 7200000}",
             tenantId = "ke",
             stationId = 102,
             stationName = "Kisumu Lake Station",
             timezone = "Africa/Nairobi",
-            obsTimeUtcMs = now - 7200000, // 2 hours ago
+            obsTimeUtcMs = now - 7200000,
             createdAtMs = now - 7200000,
             updatedAtMs = now - 7200000,
             late = true,
@@ -556,53 +724,18 @@ private fun createSampleObservationsData(): List<ObservationEntity> {
             payloadJson = """{"records":[{"variable_mapping_id":2,"value":15.2}]}""",
             status = ObservationEntity.SyncStatus.SYNCED,
             remoteId = 1002
-        ), ObservationEntity(
-            obsKey = "ke:103:${now - 10800000}",
-            tenantId = "ke",
-            stationId = 103,
-            stationName = "Mombasa Port Station",
-            timezone = "Africa/Nairobi",
-            obsTimeUtcMs = now - 10800000, // 3 hours ago
-            createdAtMs = now - 10800000,
-            updatedAtMs = now - 10800000,
-            late = false,
-            locked = false,
-            scheduleMode = "fixed_local",
-            payloadJson = """{"records":[{"variable_mapping_id":3,"value":28.1}]}""",
-            status = ObservationEntity.SyncStatus.QUEUED,
-            remoteId = null
-        ), ObservationEntity(
-            obsKey = "ke:104:${now - 14400000}",
-            tenantId = "ke",
-            stationId = 104,
-            stationName = "Eldoret Highland Station",
-            timezone = "Africa/Nairobi",
-            obsTimeUtcMs = now - 14400000, // 4 hours ago
-            createdAtMs = now - 14400000,
-            updatedAtMs = now - 14400000,
-            late = false,
-            locked = false,
-            scheduleMode = "fixed_local",
-            payloadJson = """{"records":[{"variable_mapping_id":4,"value":19.3}]}""",
-            status = ObservationEntity.SyncStatus.FAILED,
-            remoteId = null,
-            lastError = "Network timeout"
-        ), ObservationEntity(
-            obsKey = "ke:101:${now - 86400000}",
-            tenantId = "ke",
-            stationId = 101,
-            stationName = "Nairobi Weather Station",
-            timezone = "Africa/Nairobi",
-            obsTimeUtcMs = now - 86400000, // Yesterday
-            createdAtMs = now - 86400000,
-            updatedAtMs = now - 86400000,
-            late = false,
-            locked = true,
-            scheduleMode = "fixed_local",
-            payloadJson = """{"records":[{"variable_mapping_id":1,"value":22.1}]}""",
-            status = ObservationEntity.SyncStatus.SYNCED,
-            remoteId = 999
         )
+    )
+}
+
+private fun createSampleAvailableDates(): List<LocalDate> {
+    val today = LocalDate.now()
+    return listOf(
+        today,
+        today.minusDays(1),
+        today.minusDays(2),
+        today.minusDays(5),
+        today.minusDays(7)
     )
 }
 
@@ -610,172 +743,48 @@ private fun createSampleObservationsData(): List<ObservationEntity> {
    Previews
    --------------------------- */
 
-@Preview(name = "Observations Screen • Light", showBackground = true)
+@Preview(name = "Dropdown Observations Screen • Light", showBackground = true)
 @Composable
-private fun PreviewObservationsScreen() {
+private fun PreviewDropdownObservationsScreen() {
     ADLCollectorTheme {
-        ObservationsScreenContent(
+        ObservationsContent(
+            padding = PaddingValues(0.dp),
             summary = ObservationSummary(
-                syncedToday = 5, pendingToday = 2, failedToday = 1
+                syncedToday = 5,
+                pendingToday = 2,
+                failedToday = 1
             ),
             observations = createSampleObservationsData(),
+            selectedDate = LocalDate.now(),
+            availableDates = createSampleAvailableDates(),
             isLoading = false,
-            hasPendingObservations = true, // Has pending items - Sync now should be enabled
-            error = null,
             onObservationClick = {},
-            onRetry = {})
-    }
-}
-
-@Preview(name = "Syncing State", showBackground = true)
-@Composable
-private fun PreviewSyncingState() {
-    ADLCollectorTheme {
-        ObservationsScreenContent(
-            summary = ObservationSummary(
-                syncedToday = 3, pendingToday = 2, failedToday = 0
-            ),
-            observations = createSampleObservationsData(),
-            isLoading = false,
-            hasPendingObservations = true,
-            isSyncing = true, // Show rotating sync icon
-            error = null,
-            onObservationClick = {},
-            onRetry = {})
-    }
-}
-
-@Preview(name = "No Pending Observations", showBackground = true)
-@Composable
-private fun PreviewNoPendingObservations() {
-    ADLCollectorTheme {
-        val syncedObservations = createSampleObservationsData().map {
-            it.copy(status = ObservationEntity.SyncStatus.SYNCED)
-        }
-
-        ObservationsScreenContent(
-            summary = ObservationSummary(
-                syncedToday = 7, pendingToday = 0, failedToday = 0
-            ),
-            observations = syncedObservations,
-            isLoading = false,
-            hasPendingObservations = false, // No pending items - Sync now should be disabled
-            error = null,
-            onObservationClick = {},
-            onRetry = {})
-    }
-}
-
-@Preview(name = "Loading State", showBackground = true)
-@Composable
-private fun PreviewObservationsLoading() {
-    ADLCollectorTheme {
-        ObservationsScreenContent(
-            summary = ObservationSummary(),
-            observations = emptyList(),
-            isLoading = true,
-            hasPendingObservations = false,
-            error = null,
-            onObservationClick = {},
-            onRetry = {})
-    }
-}
-
-@Preview(name = "Error State", showBackground = true)
-@Composable
-private fun PreviewObservationsError() {
-    ADLCollectorTheme {
-        ObservationsScreenContent(
-            summary = ObservationSummary(),
-            observations = emptyList(),
-            isLoading = false,
-            hasPendingObservations = false,
-            error = "Network connection failed",
-            onObservationClick = {},
-            onRetry = {})
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ObservationsScreenContent(
-    summary: ObservationSummary,
-    observations: List<ObservationEntity>,
-    isLoading: Boolean,
-    hasPendingObservations: Boolean = false,
-    isSyncing: Boolean = false,
-    error: String?,
-    onObservationClick: (ObservationEntity) -> Unit,
-    onRetry: () -> Unit,
-    onSyncNow: () -> Unit = {}
-) {
-    Scaffold(
-        topBar = {
-            TopAppBar(title = { Text("Observations") }, actions = {
-                SyncButton(
-                    isSyncing = isSyncing,
-                    hasPendingObservations = hasPendingObservations,
-                    onSyncClick = onSyncNow
-                )
-            })
-        }) { padding ->
-        when {
-            error != null -> {
-                ErrorContent(
-                    error = error, onRetry = onRetry, modifier = Modifier.padding(padding)
-                )
-            }
-
-            else -> {
-                ObservationsContent(
-                    padding = padding,
-                    summary = summary,
-                    observations = observations,
-                    isLoading = isLoading,
-                    onObservationClick = onObservationClick
-                )
-            }
-        }
-    }
-}
-
-@Preview(name = "Summary Card", showBackground = true)
-@Composable
-private fun PreviewSummaryCard() {
-    ADLCollectorTheme {
-        TodaySummaryCard(
-            summary = ObservationSummary(
-                syncedToday = 5, pendingToday = 2, failedToday = 1
-            )
+            onDateSelected = {}
         )
     }
 }
 
-@Preview(name = "Empty State", showBackground = true)
-@Composable
-private fun PreviewEmptyObservations() {
-    ADLCollectorTheme {
-        EmptyObservationsState()
-    }
-}
-
 @Preview(
-    name = "Observations Screen • Dark",
+    name = "Dropdown Observations Screen • Dark",
     showBackground = true,
     uiMode = Configuration.UI_MODE_NIGHT_YES
 )
 @Composable
-private fun PreviewObservationsScreenDark() {
+private fun PreviewDropdownObservationsScreenDark() {
     ADLCollectorTheme(darkTheme = true) {
-        ObservationsScreenContent(
+        ObservationsContent(
+            padding = PaddingValues(0.dp),
             summary = ObservationSummary(
-                syncedToday = 3, pendingToday = 1, failedToday = 0
+                syncedToday = 3,
+                pendingToday = 1,
+                failedToday = 0
             ),
             observations = createSampleObservationsData(),
+            selectedDate = LocalDate.now().minusDays(1),
+            availableDates = createSampleAvailableDates(),
             isLoading = false,
-            hasPendingObservations = true,
-            error = null,
             onObservationClick = {},
-            onRetry = {})
+            onDateSelected = {}
+        )
     }
 }

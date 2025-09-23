@@ -30,6 +30,20 @@ interface ObservationDao {
     @Query(
         """
         SELECT * FROM observations
+        WHERE tenantId = :tenantId 
+        AND obsTimeUtcMs BETWEEN :startMs AND :endMs
+        ORDER BY obsTimeUtcMs DESC
+        """
+    )
+    suspend fun getObservationsInDateRange(
+        tenantId: String,
+        startMs: Long,
+        endMs: Long
+    ): List<ObservationEntity>
+
+    @Query(
+        """
+        SELECT * FROM observations
         WHERE status IN ('QUEUED','FAILED') AND tenantId = :tenantId
         ORDER BY createdAtMs ASC
         LIMIT :limit

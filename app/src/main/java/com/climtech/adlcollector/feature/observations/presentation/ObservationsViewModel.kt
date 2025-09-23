@@ -46,6 +46,8 @@ data class ObservationsUiState(
     val observations: List<ObservationEntity> = emptyList(),
     val summary: ObservationSummary = ObservationSummary(),
     val uploadStatus: UploadStatus = UploadStatus(),
+    val selectedDate: LocalDate = LocalDate.now(),
+    val availableDates: List<LocalDate> = emptyList(), // dates with observations in the last 30 days
     val error: String? = null
 ) {
     // Computed property for backward compatibility
@@ -70,6 +72,10 @@ class ObservationsViewModel @Inject constructor(
 
     private var monitoringJob: Job? = null
 
+    companion object {
+        private const val LOOKBACK_DAYS = 30L
+    }
+
     fun start(tenantId: String) {
         if (currentTenantId == tenantId) return
         currentTenantId = tenantId
@@ -79,20 +85,28 @@ class ObservationsViewModel @Inject constructor(
         // Cancel previous monitoring job
         monitoringJob?.cancel()
 
-
         monitoringJob = viewModelScope.launch {
             try {
-                // Combine observations stream with upload status monitoring
+                // Load available dates first
+                loadAvailableDates(tenantId)
+
+                // Combine observations stream for selected date with upload status monitoring
                 combine(
-                    observationDao.streamAllForTenant(tenantId), monitorUploadWork()
-                ) { observations, uploadStatus ->
-                    val summary = calculateSummary(observations, tenantId)
+                    observationDao.streamAllForTenant(tenantId),
+                    monitorUploadWork()
+                ) { allObservations, uploadStatus ->
+                    val selectedDate = _uiState.value.selectedDate
+                    val filteredObservations =
+                        filterObservationsByDate(allObservations, selectedDate)
+                    val summary = calculateSummary(allObservations, tenantId)
 
                     ObservationsUiState(
                         isLoading = false,
-                        observations = observations.sortedByDescending { it.obsTimeUtcMs },
+                        observations = filteredObservations.sortedByDescending { it.obsTimeUtcMs },
                         summary = summary,
                         uploadStatus = uploadStatus,
+                        selectedDate = selectedDate,
+                        availableDates = _uiState.value.availableDates,
                         error = null
                     )
                 }.collectLatest { state ->
@@ -108,6 +122,72 @@ class ObservationsViewModel @Inject constructor(
         // Clean up stuck uploads on start
         viewModelScope.launch {
             cleanupStuckUploads(tenantId)
+        }
+    }
+
+    private suspend fun loadAvailableDates(tenantId: String) {
+        try {
+            // Get observations from the last 30 days
+            val now = LocalDate.now()
+            val thirtyDaysAgo = now.minusDays(LOOKBACK_DAYS)
+            val startMs =
+                thirtyDaysAgo.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            val endMs =
+                now.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+            val observations = observationDao.getObservationsInDateRange(tenantId, startMs, endMs)
+
+            // Extract unique dates from observations
+            val availableDates = observations
+                .map { obs ->
+                    Instant.ofEpochMilli(obs.obsTimeUtcMs)
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDate()
+                }
+                .distinct()
+                .sorted()
+                .reversed() // Most recent first
+
+            _uiState.value = _uiState.value.copy(availableDates = availableDates)
+        } catch (e: Exception) {
+            // Log error but don't fail the whole screen
+            android.util.Log.e("ObservationsViewModel", "Failed to load available dates", e)
+        }
+    }
+
+    fun selectDate(date: LocalDate) {
+        if (date == _uiState.value.selectedDate) return
+
+        _uiState.value = _uiState.value.copy(selectedDate = date)
+
+        // Reload observations for the selected date
+        currentTenantId?.let { tenantId ->
+            viewModelScope.launch {
+                try {
+                    val allObservations = observationDao.streamAllForTenant(tenantId).first()
+                    val filteredObservations = filterObservationsByDate(allObservations, date)
+
+                    _uiState.value = _uiState.value.copy(
+                        observations = filteredObservations.sortedByDescending { it.obsTimeUtcMs }
+                    )
+                } catch (e: Exception) {
+                    _uiState.value = _uiState.value.copy(
+                        error = "Failed to load observations for selected date: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
+
+    private fun filterObservationsByDate(
+        observations: List<ObservationEntity>,
+        selectedDate: LocalDate
+    ): List<ObservationEntity> {
+        return observations.filter { obs ->
+            val obsDate = Instant.ofEpochMilli(obs.obsTimeUtcMs)
+                .atZone(ZoneId.systemDefault())
+                .toLocalDate()
+            obsDate == selectedDate
         }
     }
 
@@ -142,7 +222,6 @@ class ObservationsViewModel @Inject constructor(
     private fun monitorUploadWork() = kotlinx.coroutines.flow.flow {
         while (true) {
             try {
-                // Use the suspend function instead of blocking .get()
                 val uploadWorks = workManager.getWorkInfosByTagFlow("upload_observations").first()
 
                 val activeWork = uploadWorks.firstOrNull {
@@ -165,11 +244,10 @@ class ObservationsViewModel @Inject constructor(
 
                 emit(uploadStatus)
             } catch (e: Exception) {
-                // Emit a default status on error
                 emit(UploadStatus())
             }
 
-            kotlinx.coroutines.delay(2000) // Check every 2 seconds
+            kotlinx.coroutines.delay(2000)
         }
     }
 
@@ -197,7 +275,6 @@ class ObservationsViewModel @Inject constructor(
 
                         workManager.enqueue(workRequest)
 
-                        // NotificationHelper already checks permissions internally
                         if (isUrgent) {
                             notificationHelper.showUploadProgress(0, 1)
                         }
@@ -221,10 +298,7 @@ class ObservationsViewModel @Inject constructor(
                 try {
                     val retryCount = observationsRepository.retryFailedObservations(tenantId)
                     if (retryCount > 0) {
-                        // Clear failure notification since we're retrying
                         notificationHelper.clearUploadFailure()
-
-                        // Start sync automatically
                         syncNow(isUrgent = false)
                     }
                 } catch (e: Exception) {
@@ -238,11 +312,9 @@ class ObservationsViewModel @Inject constructor(
 
     private suspend fun cleanupStuckUploads(tenantId: String) {
         try {
-            // Reset observations that have been "uploading" for more than 10 minutes
             val timeoutMs = System.currentTimeMillis() - (10 * 60 * 1000)
             observationDao.resetStuckUploading(tenantId, timeoutMs, System.currentTimeMillis())
         } catch (e: Exception) {
-            // Log but don't fail - this is cleanup
             android.util.Log.w("ObservationsViewModel", "Failed to cleanup stuck uploads", e)
         }
     }
@@ -270,11 +342,9 @@ class ObservationsViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(error = null)
     }
 
-    //  cleanup
     override fun onCleared() {
         super.onCleared()
         monitoringJob?.cancel()
-        // Hide any ongoing upload notifications when the ViewModel is cleared
         notificationHelper.hideUploadProgress()
     }
 }
