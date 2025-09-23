@@ -8,6 +8,7 @@ import androidx.work.WorkManager
 import com.climtech.adlcollector.core.auth.TenantLocalStore
 import com.climtech.adlcollector.core.data.db.ObservationDao
 import com.climtech.adlcollector.core.data.db.ObservationEntity
+import com.climtech.adlcollector.core.util.Logger
 import com.climtech.adlcollector.core.util.NotificationHelper
 import com.climtech.adlcollector.feature.observations.data.ObservationsRepository
 import com.climtech.adlcollector.feature.observations.sync.UploadObservationsWorker
@@ -151,7 +152,7 @@ class ObservationsViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(availableDates = availableDates)
         } catch (e: Exception) {
             // Log error but don't fail the whole screen
-            android.util.Log.e("ObservationsViewModel", "Failed to load available dates", e)
+            Logger.e("ObservationsViewModel", "Failed to load available dates", e)
         }
     }
 
@@ -315,7 +316,7 @@ class ObservationsViewModel @Inject constructor(
             val timeoutMs = System.currentTimeMillis() - (10 * 60 * 1000)
             observationDao.resetStuckUploading(tenantId, timeoutMs, System.currentTimeMillis())
         } catch (e: Exception) {
-            android.util.Log.w("ObservationsViewModel", "Failed to cleanup stuck uploads", e)
+            Logger.w("ObservationsViewModel", "Failed to cleanup stuck uploads", e)
         }
     }
 
@@ -324,9 +325,9 @@ class ObservationsViewModel @Inject constructor(
             viewModelScope.launch {
                 try {
                     val stats = observationsRepository.getUploadStats(tenantId)
-                    android.util.Log.d("ObservationsViewModel", "Upload stats: $stats")
+                    Logger.d("ObservationsViewModel", "Upload stats: $stats")
                 } catch (e: Exception) {
-                    android.util.Log.e("ObservationsViewModel", "Failed to get upload stats", e)
+                    Logger.e("ObservationsViewModel", "Failed to get upload stats", e)
                 }
             }
         }

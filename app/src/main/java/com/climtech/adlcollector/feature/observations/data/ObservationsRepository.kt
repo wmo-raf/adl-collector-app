@@ -1,6 +1,5 @@
 package com.climtech.adlcollector.feature.observations.data
 
-import android.util.Log
 import com.climtech.adlcollector.core.auth.AuthManager
 import com.climtech.adlcollector.core.data.db.AppDatabase
 import com.climtech.adlcollector.core.data.db.ObservationEntity
@@ -9,6 +8,7 @@ import com.climtech.adlcollector.core.data.network.NetworkModule
 import com.climtech.adlcollector.core.data.network.TokenAuthenticator
 import com.climtech.adlcollector.core.model.TenantConfig
 import com.climtech.adlcollector.core.net.NetworkException
+import com.climtech.adlcollector.core.util.Logger
 import com.climtech.adlcollector.core.util.Result
 import com.climtech.adlcollector.core.util.asResult
 import com.climtech.adlcollector.feature.observations.data.net.ObservationPostRequest
@@ -95,10 +95,10 @@ class ObservationsRepository @Inject constructor(
             )
 
             dao.upsert(entity)
-            Log.d(TAG, "Queued observation: $key")
+            Logger.d(TAG, "Queued observation: $key")
             Result.Ok(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to queue observation", e)
+            Logger.e(TAG, "Failed to queue observation", e)
             Result.Err(e)
         }
     }
@@ -113,11 +113,11 @@ class ObservationsRepository @Inject constructor(
         val pending = dao.nextPending(tenant.id, batchSize)
 
         if (pending.isEmpty()) {
-            Log.d(TAG, "No pending observations to upload")
+            Logger.d(TAG, "No pending observations to upload")
             return UploadBatchResult(0, 0, 0, false)
         }
 
-        Log.d(TAG, "Starting batch upload: ${pending.size} observations for tenant ${tenant.id}")
+        Logger.d(TAG, "Starting batch upload: ${pending.size} observations for tenant ${tenant.id}")
 
         val api = apiFor(tenant)
         var successCount = 0
@@ -133,7 +133,7 @@ class ObservationsRepository @Inject constructor(
                     dao.markSynced(
                         observation.obsKey, result.serverResponse?.id, System.currentTimeMillis()
                     )
-                    Log.d(TAG, "Successfully uploaded observation: ${observation.obsKey}")
+                    Logger.d(TAG, "Successfully uploaded observation: ${observation.obsKey}")
                 }
 
                 result.isPermanentFailure -> {
@@ -144,7 +144,7 @@ class ObservationsRepository @Inject constructor(
                         "Permanent failure: ${result.errorMessage}",
                         System.currentTimeMillis()
                     )
-                    Log.w(
+                    Logger.w(
                         TAG,
                         "Permanent failure for observation ${observation.obsKey}: ${result.errorMessage}"
                     )
@@ -158,7 +158,7 @@ class ObservationsRepository @Inject constructor(
                         "Retriable failure: ${result.errorMessage}",
                         System.currentTimeMillis()
                     )
-                    Log.w(
+                    Logger.w(
                         TAG,
                         "Retriable failure for observation ${observation.obsKey}: ${result.errorMessage}"
                     )
@@ -172,7 +172,7 @@ class ObservationsRepository @Inject constructor(
         val batchResult =
             UploadBatchResult(successCount, permanentFailures, retriableFailures, hasMoreWork)
 
-        Log.i(
+        Logger.i(
             TAG,
             "Batch upload completed: success=$successCount, permanent=$permanentFailures, " + "retriable=$retriableFailures, hasMore=$hasMoreWork"
         )
@@ -222,7 +222,7 @@ class ObservationsRepository @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Exception during observation upload", e)
+            Logger.e(TAG, "Exception during observation upload", e)
             UploadAttemptResult(
                 success = false,
                 isPermanentFailure = isPermanentError(e),
@@ -258,7 +258,7 @@ class ObservationsRepository @Inject constructor(
                 recordMap.containsKey("variable_mapping_id") && recordMap.containsKey("value")
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Payload validation failed", e)
+            Logger.w(TAG, "Invalid observation payload format", e)
             false
         }
     }
@@ -306,7 +306,7 @@ class ObservationsRepository @Inject constructor(
                 )
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to convert observation to POST payload", e)
+            Logger.e(TAG, "Failed to convert observation to POST payload", e)
             null
         }
     }
@@ -339,7 +339,7 @@ class ObservationsRepository @Inject constructor(
             retryCount++
         }
 
-        Log.i(TAG, "Reset $retryCount failed observations to queued status for tenant $tenantId")
+        Logger.i(TAG, "Reset $retryCount failed observations to queued status for tenant $tenantId")
         return retryCount
     }
 }

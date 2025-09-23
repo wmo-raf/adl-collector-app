@@ -2,6 +2,7 @@ package com.climtech.adlcollector.feature.observations.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.climtech.adlcollector.BuildConfig
 import com.climtech.adlcollector.core.model.TenantConfig
 import com.climtech.adlcollector.core.util.Result
 import com.climtech.adlcollector.feature.observations.data.ObservationsRepository
@@ -27,6 +28,7 @@ import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 import javax.inject.Inject
+
 
 data class ObservationVariableUi(
     val id: Long,
@@ -198,7 +200,7 @@ class ObservationFormViewModel @Inject constructor(
             _ui.value = state.copy(submitting = true, error = null)
             val isoObsUtc = SchedulePolicy.localToIsoZ(state.displayLocal, tz)
 
-            val appVersion = "0.0.1"
+            val appVersion = BuildConfig.VERSION_NAME
 
             // Store minimal payload for repo to finalize on upload
             val payload = mapOf(

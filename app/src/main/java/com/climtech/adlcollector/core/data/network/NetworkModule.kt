@@ -1,5 +1,6 @@
 package com.climtech.adlcollector.core.data.network
 
+import com.climtech.adlcollector.BuildConfig
 import com.squareup.moshi.Moshi
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -9,7 +10,8 @@ import retrofit2.converter.moshi.MoshiConverterFactory
 object NetworkModule {
 
     fun okHttpClient(
-        authInterceptor: AuthInterceptor? = null, enableLogging: Boolean = true
+        authInterceptor: AuthInterceptor? = null,
+        enableLogging: Boolean = BuildConfig.DEBUG
     ): OkHttpClient {
         val builder = OkHttpClient.Builder()
 

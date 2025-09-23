@@ -57,6 +57,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.climtech.adlcollector.BuildConfig
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -201,7 +202,9 @@ private fun AppInfoCard() {
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 InfoRow(
-                    icon = Icons.Filled.Apps, label = "Version", value = "1.0.0"
+                    icon = Icons.Filled.Apps,
+                    label = "Version",
+                    value = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
                 )
             }
         }

@@ -2,7 +2,6 @@ package com.climtech.adlcollector.app
 
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.LaunchedEffect
@@ -18,6 +17,7 @@ import com.climtech.adlcollector.core.auth.TenantLocalStore
 import com.climtech.adlcollector.core.auth.TenantManager
 import com.climtech.adlcollector.core.ui.components.ErrorScreen
 import com.climtech.adlcollector.core.ui.components.LoadingScreen
+import com.climtech.adlcollector.core.util.Logger
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.AndroidEntryPoint
@@ -39,16 +39,16 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Log.i("OAUTH_APP", "========== APP STARTED ==========")
+        Logger.i("OAUTH_APP", "========== APP STARTED ==========")
 
         // Firebase init
         FirebaseApp.initializeApp(this)
 
         // Optional connectivity check
         FirebaseFirestore.getInstance().collection("tenants").get().addOnSuccessListener { docs ->
-            Log.i("FIREBASE", "Loaded tenants snapshot: ${docs.size()}")
+            Logger.i("FIREBASE", "Loaded tenants snapshot: ${docs.size()}")
         }.addOnFailureListener { e ->
-            Log.e("FIREBASE", "Error fetching tenants", e)
+            Logger.e("FIREBASE", "Error fetching tenants", e)
         }
 
         // Initialize OAuth service
@@ -84,15 +84,15 @@ class MainActivity : ComponentActivity() {
                 lifecycleScope.launch {
                     when (val result = oauthManager.handleAuthCompleted(intent)) {
                         is OAuthResult.Success -> {
-                            Log.d("MainActivity", "OAuth completed successfully")
+                            Logger.d("MainActivity", "OAuth completed successfully")
                         }
 
                         is OAuthResult.Error -> {
-                            Log.e("MainActivity", "OAuth error: ${result.message}")
+                            Logger.e("MainActivity", "OAuth error: ${result.message}")
                         }
 
                         OAuthResult.Cancelled -> {
-                            Log.d("MainActivity", "OAuth cancelled by user")
+                            Logger.d("MainActivity", "OAuth cancelled by user")
                         }
                     }
                 }
@@ -104,7 +104,7 @@ class MainActivity : ComponentActivity() {
         val tenant = tenantManager.state.value.selectedTenant
         if (tenant == null) {
             // This should not happen given UI constraints, but handle gracefully
-            Log.w("MainActivity", "No tenant selected for login")
+            Logger.w("MainActivity", "No tenant selected for login")
             return
         }
 

@@ -8,7 +8,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.PowerManager
-import android.util.Log
+import com.climtech.adlcollector.core.util.Logger
 import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -122,19 +122,19 @@ class UploadObservationsWorker @AssistedInject constructor(
         val isUrgent = inputData.getBoolean(KEY_IS_URGENT, false)
         val consecutiveFailures = inputData.getInt(KEY_CONSECUTIVE_FAILURES, 0)
 
-        Log.d(TAG, "Starting upload: tenant=$tenantId, retry=$retryCount, urgent=$isUrgent")
+        Logger.d(TAG, "Starting upload: tenant=$tenantId, retry=$retryCount, urgent=$isUrgent")
 
         return try {
             // Check network conditions
             val networkInfo = getNetworkInfo()
             if (!isNetworkSuitable(networkInfo, allowMetered)) {
-                Log.d(TAG, "Network conditions not suitable for upload")
+                Logger.d(TAG, "Network conditions not suitable for upload")
                 return Result.retry()
             }
 
             // Check battery optimization (non-blocking)
             if (!isUrgent && isBatteryOptimized()) {
-                Log.d(TAG, "Battery optimization active, deferring non-urgent upload")
+                Logger.d(TAG, "Battery optimization active, deferring non-urgent upload")
                 return Result.retry()
             }
 
@@ -146,7 +146,7 @@ class UploadObservationsWorker @AssistedInject constructor(
             // Perform upload with exponential backoff on retries
             if (retryCount > 0) {
                 val backoffDelay = calculateBackoffDelay(retryCount)
-                Log.d(TAG, "Applying backoff delay: ${backoffDelay}ms")
+                Logger.d(TAG, "Applying backoff delay: ${backoffDelay}ms")
                 delay(backoffDelay)
             }
 
@@ -163,7 +163,7 @@ class UploadObservationsWorker @AssistedInject constructor(
             )
 
         } catch (e: Exception) {
-            Log.e(TAG, "Upload worker failed", e)
+            Logger.e(TAG, "Upload worker failed", e)
             handleException(
                 e, tenantId, endpoint, retryCount, consecutiveFailures, allowMetered, isUrgent
             )
@@ -180,7 +180,7 @@ class UploadObservationsWorker @AssistedInject constructor(
         allowMetered: Boolean,
         isUrgent: Boolean
     ): Result {
-        Log.d(
+        Logger.d(
             TAG,
             "Upload result: success=${result.successCount}, " + "permanent=${result.permanentFailures}, retriable=${result.retriableFailures}, " + "hasMore=${result.hasMoreWork}"
         )
@@ -188,13 +188,13 @@ class UploadObservationsWorker @AssistedInject constructor(
         return when {
             // Complete success - no more work
             result.totalProcessed > 0 && !result.shouldRetry -> {
-                Log.i(TAG, "Upload completed successfully")
+                Logger.i(TAG, "Upload completed successfully")
                 Result.success(createSuccessData(result))
             }
 
             // Partial success or more work to do - continue
             result.successCount > 0 && result.hasMoreWork -> {
-                Log.d(TAG, "Partial success, scheduling continuation")
+                Logger.d(TAG, "Partial success, scheduling continuation")
                 scheduleNextBatch(
                     tenantId, endpoint, 0, allowMetered, isUrgent
                 ) // Reset retry count on progress
@@ -203,12 +203,12 @@ class UploadObservationsWorker @AssistedInject constructor(
             // Retriable failures
             result.retriableFailures > 0 -> {
                 if (retryCount >= MAX_RETRIES) {
-                    Log.w(TAG, "Max retries exceeded, marking as failure")
+                    Logger.w(TAG, "Max retries exceeded, marking as failure")
                     val newConsecutiveFailures = consecutiveFailures + 1
                     handleConsecutiveFailures(newConsecutiveFailures, tenantId)
                     Result.failure(createErrorData("Max retries exceeded"))
                 } else {
-                    Log.d(TAG, "Retriable failures, scheduling retry")
+                    Logger.d(TAG, "Retriable failures, scheduling retry")
                     scheduleRetry(
                         tenantId,
                         endpoint,
@@ -222,13 +222,13 @@ class UploadObservationsWorker @AssistedInject constructor(
 
             // Only permanent failures
             result.permanentFailures > 0 && result.retriableFailures == 0 -> {
-                Log.w(TAG, "Only permanent failures, not retrying")
+                Logger.w(TAG, "Only permanent failures, not retrying")
                 Result.success(createSuccessData(result)) // Don't retry permanent failures
             }
 
             // No work done
             else -> {
-                Log.d(TAG, "No work to do")
+                Logger.d(TAG, "No work to do")
                 Result.success()
             }
         }
@@ -246,21 +246,21 @@ class UploadObservationsWorker @AssistedInject constructor(
     ): Result {
         return when {
             isPermanentError(exception) -> {
-                Log.e(TAG, "Permanent error, not retrying", exception)
+                Logger.e(TAG, "Permanent error, not retrying", exception)
                 val newConsecutiveFailures = consecutiveFailures + 1
                 handleConsecutiveFailures(newConsecutiveFailures, tenantId)
                 Result.failure(createErrorData("Permanent error: ${exception.message}"))
             }
 
             retryCount >= MAX_RETRIES -> {
-                Log.e(TAG, "Max retries exceeded after exception", exception)
+                Logger.e(TAG, "Max retries exceeded after exception", exception)
                 val newConsecutiveFailures = consecutiveFailures + 1
                 handleConsecutiveFailures(newConsecutiveFailures, tenantId)
                 Result.failure(createErrorData("Max retries exceeded: ${exception.message}"))
             }
 
             else -> {
-                Log.w(TAG, "Retriable exception, scheduling retry", exception)
+                Logger.w(TAG, "Retriable exception, scheduling retry", exception)
                 scheduleRetry(
                     tenantId, endpoint, retryCount + 1, consecutiveFailures, allowMetered, isUrgent
                 )
@@ -340,7 +340,7 @@ class UploadObservationsWorker @AssistedInject constructor(
                     !pm.isIgnoringBatteryOptimizations(appContext.packageName)
                 } ?: false
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to check battery optimization status", e)
+                Logger.w(TAG, "Failed to check battery optimization status", e)
                 false
             }
         } else {
@@ -430,7 +430,7 @@ class UploadObservationsWorker @AssistedInject constructor(
         }
 
         // Log for analytics/monitoring
-        Log.w(TAG, "Consecutive upload failures: $consecutiveFailures for tenant: $tenantId")
+        Logger.w(TAG, "Consecutive upload failures: $consecutiveFailures for tenant: $tenantId")
     }
 
     @RequiresPermission(Manifest.permission.POST_NOTIFICATIONS)
@@ -447,7 +447,7 @@ class UploadObservationsWorker @AssistedInject constructor(
                     .notify(UPLOAD_FAILURE_NOTIFICATION_ID, notification)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to show notification", e)
+            Logger.e(TAG, "Failed to show notification", e)
         }
     }
 

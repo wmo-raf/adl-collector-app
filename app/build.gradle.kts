@@ -11,21 +11,38 @@ android {
     namespace = "com.climtech.adlcollector"
     compileSdk = 36
 
+    // Enable BuildConfig generation
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+
     defaultConfig {
         applicationId = "com.climtech.adlcollector"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
-        versionName = "1.0"
+        versionName = "0.1.0-beta"
 
         manifestPlaceholders["appAuthRedirectScheme"] = "com.climtech.adlcollector"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // BuildConfig fields
+        buildConfigField("String", "VERSION_NAME", "\"$versionName\"")
+        buildConfigField("int", "VERSION_CODE", "$versionCode")
+        buildConfigField("boolean", "DEBUG", "false")
     }
 
     buildTypes {
+        debug {
+            isDebuggable = true
+            buildConfigField("boolean", "DEBUG", "true")
+        }
+
         release {
             isMinifyEnabled = false
+            buildConfigField("boolean", "DEBUG", "false")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
             )
@@ -39,8 +56,6 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     kotlin { jvmToolchain(17) }
-
-    buildFeatures { compose = true }
 }
 
 dependencies {

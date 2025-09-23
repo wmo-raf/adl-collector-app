@@ -3,9 +3,9 @@ package com.climtech.adlcollector.core.auth
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.util.Log
 import androidx.core.net.toUri
 import com.climtech.adlcollector.core.model.TenantConfig
+import com.climtech.adlcollector.core.util.Logger
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -51,7 +51,7 @@ class OAuthManager @Inject constructor(
     fun initialize(context: Context) {
         authService?.dispose()
         authService = AuthorizationService(context)
-        Log.i("OAuthManager", "Initialized OAuth service")
+        Logger.i("OAuthManager", "Initialized OAuth service")
     }
 
     fun dispose() {
@@ -90,7 +90,7 @@ class OAuthManager @Inject constructor(
             authService?.performAuthorizationRequest(authRequest, completeIntent, cancelIntent)
             true
         } catch (e: Exception) {
-            Log.e("OAuthManager", "Login error", e)
+            Logger.e("OAuthManager", "Login error", e)
             _state.value =
                 _state.value.copy(isInProgress = false, error = "Login error: ${e.message}")
             false
