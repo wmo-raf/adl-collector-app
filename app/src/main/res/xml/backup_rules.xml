@@ -1,17 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-    <!-- Exclude sensitive authentication and observation data from backup -->
-    <exclude domain="sharedpref" path="tenant_prefs.xml" />
-    <exclude domain="database" path="adl.db" />
-    <exclude domain="database" path="adl.db-shm" />
-    <exclude domain="database" path="adl.db-wal" />
+    <!-- Include everything by default -->
+    <include
+        domain="sharedpref"
+        path="." />
+    <include
+        domain="database"
+        path="." />
+    <include
+        domain="file"
+        path="." />
 
-    <!-- Exclude any cached files -->
-    <exclude domain="cache" />
-
-    <!-- Include safe app settings -->
-    <include domain="sharedpref" path="app_settings.xml" />
-
-    <!-- Exclude any temporary files -->
-    <exclude domain="files" path="temp/" />
+    <!-- Then exclude sensitive data -->
+    <exclude
+        domain="sharedpref"
+        path="tenant_prefs.xml" />
+    <exclude
+        domain="database"
+        path="adl.db" />
+    <exclude
+        domain="database"
+        path="adl.db-shm" />
+    <exclude
+        domain="database"
+        path="adl.db-wal" />
 </full-backup-content>
