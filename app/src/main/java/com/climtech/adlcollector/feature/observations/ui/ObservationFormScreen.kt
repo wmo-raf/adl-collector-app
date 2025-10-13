@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.climtech.adlcollector.core.model.TenantConfig
 import com.climtech.adlcollector.feature.observations.presentation.ObservationFormViewModel
+import com.climtech.adlcollector.feature.observations.presentation.ObservationVariableUi
 import com.climtech.adlcollector.feature.observations.presentation.UiEvent
 import kotlinx.coroutines.flow.collectLatest
 import java.time.format.DateTimeFormatter
@@ -164,6 +165,7 @@ fun ObservationFormScreen(
                 locked = ui.locked,
                 valid = ui.valid,
                 reason = ui.reason,
+                hasRangeErrors = ui.hasRangeErrors,
                 onShowValidation = { showValidationDialog = true }
             )
 
@@ -180,9 +182,10 @@ fun ObservationFormScreen(
 
             // Action Buttons
             ActionButtons(
-                canSubmit = ui.valid && !ui.submitting && !ui.locked,
+                canSubmit = ui.valid && !ui.submitting && !ui.locked && !ui.hasRangeErrors,
                 isSubmitting = ui.submitting,
                 variables = ui.variables,
+                hasRangeErrors = ui.hasRangeErrors,
                 onSubmit = { vm.submit() },
                 onCancel = { showCancelDialog = true }
             )
@@ -294,13 +297,22 @@ private fun StatusSection(
     locked: Boolean,
     valid: Boolean,
     reason: String?,
+    hasRangeErrors: Boolean,
     onShowValidation: () -> Unit
 ) {
-    if (late || locked || !valid) {
+    if (late || locked || !valid || hasRangeErrors) {
         Column(
             modifier = Modifier.padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            if (hasRangeErrors) {
+                StatusChip(
+                    text = "Value out of allowed range",
+                    icon = Icons.Filled.Warning,
+                    isError = true
+                )
+            }
+
             if (!valid && reason != null) {
                 StatusChip(
                     text = reason,
@@ -365,7 +377,7 @@ private fun StatusChip(
 
 @Composable
 private fun VariablesSection(
-    variables: List<com.climtech.adlcollector.feature.observations.presentation.ObservationVariableUi>,
+    variables: List<ObservationVariableUi>,
     onVariableChanged: (Long, String) -> Unit
 ) {
     Column(
@@ -397,6 +409,11 @@ private fun VariableInputField(
     var value by remember(variable.id) { mutableStateOf(variable.valueText) }
     var isError by remember { mutableStateOf(false) }
 
+    // Update local value when the variable changes from outside
+    LaunchedEffect(variable.valueText) {
+        value = variable.valueText
+    }
+
     OutlinedTextField(
         value = value,
         onValueChange = { newValue ->
@@ -409,32 +426,68 @@ private fun VariableInputField(
         label = {
             Text("${variable.name} (${variable.unit})")
         },
-        supportingText = if (variable.isRainfall) {
-            { Text("Rainfall measurement") }
-        } else null,
+        supportingText = {
+            when {
+                variable.rangeError != null -> {
+                    Text(
+                        variable.rangeError,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+
+                variable.rangeCheck != null -> {
+                    variable.rangeCheck.getDescription()?.let { description ->
+                        Text(
+                            description,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                variable.isRainfall -> {
+                    Text("Rainfall measurement")
+                }
+            }
+        },
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
         keyboardOptions = KeyboardOptions(
             keyboardType = KeyboardType.Decimal
         ),
-        isError = isError,
-        trailingIcon = if (isError) {
-            {
-                Icon(
-                    Icons.Filled.Warning,
-                    contentDescription = "Invalid number",
-                    tint = MaterialTheme.colorScheme.error
-                )
+        isError = isError || variable.rangeError != null,
+        trailingIcon = when {
+            variable.rangeError != null -> {
+                {
+                    Icon(
+                        Icons.Filled.Warning,
+                        contentDescription = "Out of range",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
             }
-        } else if (value.isNotBlank() && !isError) {
-            {
-                Icon(
-                    Icons.Filled.Check,
-                    contentDescription = "Valid",
-                    tint = MaterialTheme.colorScheme.primary
-                )
+
+            isError -> {
+                {
+                    Icon(
+                        Icons.Filled.Warning,
+                        contentDescription = "Invalid number",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
             }
-        } else null
+
+            value.isNotBlank() && !isError -> {
+                {
+                    Icon(
+                        Icons.Filled.Check,
+                        contentDescription = "Valid",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            else -> null
+        }
     )
 }
 
@@ -471,7 +524,8 @@ private fun ErrorCard(error: String) {
 private fun ActionButtons(
     canSubmit: Boolean,
     isSubmitting: Boolean,
-    variables: List<com.climtech.adlcollector.feature.observations.presentation.ObservationVariableUi>,
+    variables: List<ObservationVariableUi>,
+    hasRangeErrors: Boolean,
     onSubmit: () -> Unit,
     onCancel: () -> Unit
 ) {
@@ -480,7 +534,7 @@ private fun ActionButtons(
         variable.valueText.isNotBlank() && variable.valueText.toDoubleOrNull() != null
     }
 
-    val submitEnabled = canSubmit && allFieldsFilled && !isSubmitting
+    val submitEnabled = canSubmit && allFieldsFilled && !isSubmitting && !hasRangeErrors
 
     Column(
         modifier = Modifier
@@ -503,8 +557,11 @@ private fun ActionButtons(
                 Text("Submitting...")
             } else {
                 Text(
-                    if (!allFieldsFilled) "Fill in all measurements"
-                    else "Submit Observation"
+                    when {
+                        hasRangeErrors -> "Fix range errors"
+                        !allFieldsFilled -> "Fill in all measurements"
+                        else -> "Submit Observation"
+                    }
                 )
             }
         }

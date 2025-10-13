@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.climtech.adlcollector.core.data.db.ObservationEntity
 import com.climtech.adlcollector.feature.observations.presentation.ObservationDetailViewModel
+import com.climtech.adlcollector.feature.observations.presentation.ObservationVariable
 
 data class StatusInfo(
     val backgroundColor: Color, val textColor: Color, val icon: ImageVector, val statusText: String
@@ -363,7 +364,7 @@ private fun BasicInfoCard(
 
 @Composable
 private fun VariablesCard(
-    variables: List<com.climtech.adlcollector.feature.observations.presentation.ObservationVariable>
+    variables: List<ObservationVariable>
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -384,7 +385,7 @@ private fun VariablesCard(
 
 @Composable
 private fun VariableRow(
-    variable: com.climtech.adlcollector.feature.observations.presentation.ObservationVariable
+    variable: ObservationVariable
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),

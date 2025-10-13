@@ -35,7 +35,9 @@ data class ObservationVariableUi(
     val name: String,
     val unit: String,
     val isRainfall: Boolean,
-    val valueText: String = ""
+    val rangeCheck: StationDetail.RangeCheck? = null,
+    val valueText: String = "",
+    val rangeError: String? = null
 )
 
 data class ObservationFormUi(
@@ -49,7 +51,8 @@ data class ObservationFormUi(
     val valid: Boolean = false,
     val reason: String? = null,
     val error: String? = null,
-    val submitting: Boolean = false
+    val submitting: Boolean = false,
+    val hasRangeErrors: Boolean = false
 )
 
 sealed class UiEvent {
@@ -102,7 +105,8 @@ class ObservationFormViewModel @Inject constructor(
                         id = it.id,
                         name = it.adl_parameter_name,
                         unit = it.obs_parameter_unit,
-                        isRainfall = it.is_rainfall
+                        isRainfall = it.is_rainfall,
+                        rangeCheck = it.range_check
                     )
                 }
                 recomputeTime(null, vUi, d)
@@ -151,10 +155,26 @@ class ObservationFormViewModel @Inject constructor(
     }
 
     fun onVariableChanged(id: Long, newValueText: String) {
-        val updated = _ui.value.variables.map {
-            if (it.id == id) it.copy(valueText = newValueText) else it
+        val updated = _ui.value.variables.map { variable ->
+            if (variable.id == id) {
+                // Validate range if value is a valid number
+                val rangeError = if (newValueText.isNotBlank()) {
+                    val value = newValueText.toDoubleOrNull()
+                    if (value != null && variable.rangeCheck != null) {
+                        variable.rangeCheck.validate(value)
+                    } else null
+                } else null
+
+                variable.copy(valueText = newValueText, rangeError = rangeError)
+            } else variable
         }
-        _ui.value = _ui.value.copy(variables = updated)
+
+        val hasRangeErrors = updated.any { it.rangeError != null }
+
+        _ui.value = _ui.value.copy(
+            variables = updated,
+            hasRangeErrors = hasRangeErrors
+        )
     }
 
     private fun recomputeTime(
@@ -183,6 +203,13 @@ class ObservationFormViewModel @Inject constructor(
             _ui.value = state.copy(error = "Station detail not loaded")
             return
         }
+
+        // Check for range errors before submitting
+        if (state.hasRangeErrors) {
+            _ui.value = state.copy(error = "Please fix value range errors before submitting")
+            return
+        }
+
         if (!state.valid || state.locked) {
             _ui.value = state.copy(error = state.reason ?: "Invalid time")
             return
