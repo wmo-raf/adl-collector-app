@@ -73,9 +73,9 @@ class MainActivity : ComponentActivity() {
         super.onResume()
     }
 
-    override fun onNewIntent(intent: Intent?) {
+    override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        when (intent?.action) {
+        when (intent.action) {
             OAuthManager.ACTION_AUTH_CANCELLED -> {
                 oauthManager.handleAuthCancelled()
             }
